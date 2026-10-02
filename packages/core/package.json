@@ -1,0 +1,14 @@
+{
+"name": "@jarvis/core",
+"version": "1.0.0",
+"type": "module",
+"main": "./src/index.ts",
+"scripts": {
+"test": "vitest run",
+"test:watch": "vitest"
+},
+"dependencies": {},
+"devDependencies": {
+"@types/node": "^20.0.0"
+}
+}
