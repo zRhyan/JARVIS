@@ -1,18 +1,21 @@
 # JARVIS — Especificação Executiva do Marco 0 (M0)
 **Foco:** Fundação do Monorepo & Sandbox do Sistema de Arquivos (`vault-fs`)  
-**Status:** Decisões Ratificadas — Pronto para Implementação  
-**Data:** 2026-10-01  
+**Status:** Implementação parcial; correções e aceite definidos em E01–E03
+
+**Data:** 2026-10-03
+
+Consultar [ARQUITETURA.md](../ARQUITETURA.md), [PLANO.md](../PLANO.md) e a [auditoria](AUDITORIA.md). O vault de destino ainda não está conectado; M0 deve ser desenvolvido com fixtures descartáveis. As primitivas de escrita deste módulo serão usadas pelo daemon somente após aprovação das propostas de notas, incluindo memórias de conhecimento. Testes internos do módulo podem escrever diretamente em suas próprias fixtures.
 
 ---
 
 ## 1. O Que É o Entregável do Marco 0?
 
-O Marco 0 não possui interface visual nem IA conectada. O entregável é uma **biblioteca de núcleo auditada e testada** (`packages/core/src/vault-fs.ts`), instalada em um monorepo funcional, acompanhada de uma **bateria de testes automatizados** que comprovam matematicamente que o JARVIS:
+O Marco 0 não possui interface visual nem IA conectada. O entregável é uma biblioteca de núcleo (`packages/core/src/vault-fs.ts`), instalada em um monorepo funcional, com testes de isolamento e integridade. Os critérios abaixo são requisitos de aceite, ainda não atendidos integralmente pelo código:
 
 1. **Nunca lê nem escreve fora do cofre** (bloqueio de Path Traversal, symlinks arbitrários e referências relativas maliciosas).
 2. **Nunca corrompe áreas críticas** do Obsidian, do Git ou do agente (`.obsidian/`, `.git/`, `.jarvis/`).
 3. **Gera hashes SHA-256 imutáveis** do conteúdo no momento da leitura (essenciais para a máquina de estados `STALE` dos próximos marcos).
-4. **Executa escritas atômicas seguras** (criação via `.jarvis-tmp/` + `rename` atômico), garantindo que quedas de energia, falhas de processo ou leituras concorrentes do Obsidian nunca capturem um arquivo corrompido ou parcial.
+4. **Publica arquivos preparados em temporário**, com flush e publicação adequada a criação exclusiva ou substituição. Verificar falhas antes/depois da publicação e documentar os limites de durabilidade de cada sistema; um teste de leitura após escrita não comprova resistência a queda de energia.
 5. **Trata Windows e Linux com paridade total**, forçando UTF-8 e quebras de linha normalizadas em `\n` (LF).
 
 ---
@@ -41,6 +44,8 @@ As decisões para o início do desenvolvimento foram consolidadas:
 ---
 
 ## 3. Contrato da API do `vault-fs`
+
+A interface abaixo registra a base original. E02/E03 do plano detalham sua evolução para validação dos destinos reais e operações distintas de substituição e criação exclusiva. A escolha de APIs síncronas/assíncronas deve respeitar essas validações; compatibilidade com esta assinatura não justifica manter as falhas de isolamento.
 
 O módulo `packages/core/src/vault-fs.ts` exporá a seguinte interface estrita em TypeScript:
 
@@ -131,4 +136,4 @@ jarvis/
 1. Gerar os arquivos de manifesto da raiz e do workspace (`package.json`, `tsconfig.json`).
 2. Implementar as classes de erro de segurança (`errors.ts`).
 3. Implementar a sandbox do sistema de arquivos (`vault-fs.ts`).
-4. Implementar a suíte completa de testes (`vault-fs.test.ts`) cobrindo de T01 a T07.
+4. Completar a suíte de testes de E02/E03, incluindo T01–T07, diferenças de caixa no Windows, arquivos de sistema, junctions, caminhos relativos canônicos, falhas de I/O e criação concorrente. O teste T02 atual ainda precisa cobrir o cenário de link de filesystem especificado.

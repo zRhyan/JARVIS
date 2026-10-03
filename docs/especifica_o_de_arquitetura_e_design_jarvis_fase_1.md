@@ -1,9 +1,22 @@
 # JARVIS — Especificação de Arquitetura e Design de Software (Fase 1)
 
-**Status:** Aprovado para Execução (Atualizado com Decisões de Stack e Persistência)  
-**Versão:** 1.4.0  
-**Data:** 2026-10-01  
+**Status:** Especificação atualizada; implementação parcial conforme o plano
+
+**Versão:** 1.5.0
+
+**Data:** 2026-10-03
+
 **Escopo:** MVP Local Multiplataforma (Cenário B: Web App Local via Daemon JARVIS, preparado para Tauri/Desktop e compatibilidade com MCP).
+
+Leitura inicial: [ARQUITETURA.md](../ARQUITETURA.md) e [PLANO.md](../PLANO.md). Esta especificação detalha o produto pretendido, não comprova sua implementação. O diagnóstico do código está em [AUDITORIA.md](AUDITORIA.md).
+
+### Escopo do conhecimento e da memória
+
+O vault de destino será o cérebro de conhecimento do JARVIS. Ele ainda não está disponível neste computador; seu caminho, conteúdo e convenções não foram inspecionados. Tags como `#física` e templates de área/conceito são exemplos de teste, não uma taxonomia obrigatória.
+
+O JARVIS deve interpretar as notas existentes, recuperar fontes para responder perguntas e propor criação/atualização de conhecimento no próprio vault. Toda gravação, inclusive memória extraída de uma conversa, exige aprovação humana explícita. O SQLite guarda histórico bruto e estado operacional; a memória de conhecimento fica em Markdown e deve ser recuperável em uma sessão nova sem o chat de origem.
+
+A primeira conexão com o vault será somente para leitura e inventário. Até lá, desenvolver com fixtures descartáveis; não substituir o vault ausente por uma pasta escolhida automaticamente. O RAG inicial combina texto e grafo. A qualidade deve ser medida no conteúdo real antes de concluir se são necessários outros mecanismos de recuperação.
 
 ---
 
@@ -32,7 +45,7 @@ Ao analisar as integrações mais avançadas entre modelos de linguagem e Obsidi
 4. **Isolamento Multi-Workspace:** Chaves de API, orçamentos, caminhos de diretório e modelos são agrupados em perfis isolados para evitar contaminação entre vaults de equipe e vaults pessoais.
 5. **Portabilidade Pragmática (Windows & Linux):** O backend é construído em Node.js/TypeScript e a interface é servida localmente no navegador, garantindo paridade total entre sistemas operacionais sem overhead de empacotamento desktop nativo no MVP.
 6. **Grafo Nativo como Índice de Primeira Classe:** Resolução de dependências conceituais através da malha de wikilinks já existente no cofre.
-7. **Separação entre Conhecimento e Conversas:** O cofre versionado no Git guarda apenas as notas da equipe. O histórico de conversas do usuário com o JARVIS fica salvo em um banco relacional SQLite local na máquina do membro.
+7. **Separação entre Conhecimento e Conversas:** O cofre guarda notas e memórias de conhecimento consolidadas após aprovação. O histórico bruto de conversas e o estado operacional ficam em SQLite local, fora do cofre. Excluir um chat não exclui conhecimento já registrado nas notas.
 
 ---
 
@@ -41,8 +54,8 @@ Ao analisar as integrações mais avançadas entre modelos de linguagem e Obsidi
 ### 3.1. Requisitos Funcionais (RF)
 | ID | Requisito | Descrição |
 | :--- | :--- | :--- |
-| **RF-01** | Q&A sobre o Vault | Responder a dúvidas sintetizando o conteúdo de uma ou múltiplas notas. |
-| **RF-02** | Síntese e Manutenção Contínua | Gerar resumos, sugerir novas conexões bidirecionais (`[[wikilinks]]`), normalizar tags e estruturar frontmatter (YAML). |
+| **RF-01** | Q&A sobre o Vault | Responder a dúvidas com fontes de uma ou múltiplas notas, distinguindo informação registrada, inferência e ausência de evidência. |
+| **RF-02** | Síntese e Memória de Conhecimento | Propor resumos, conexões, criação e atualização de notas conforme as convenções reais; consolidar memória após aprovação e recuperá-la em novas sessões. |
 | **RF-03** | Ciclo de Proposta e Diff | Apresentar alterações propostas em formato de diff visual unificado, destacando adições e subtrações antes de qualquer alteração no disco. |
 | **RF-04** | Aprovação Atômica | A escrita só ocorre sob comando explícito do usuário. Falhas na aplicação abortam a transação sem deixar arquivos corrompidos. |
 | **RF-05** | Detecção de Arquivo Obsoleto (Stale) | Se o arquivo sofrer modificações no disco (ex: `git pull` ou edição direta no Obsidian) antes da aprovação da proposta, a proposta é invalidada. |
@@ -107,6 +120,8 @@ Ao analisar as integrações mais avançadas entre modelos de linguagem e Obsidi
 ### 4.1. Esquema do Banco SQLite (`jarvis.db`)
 Armazenado em `~/.config/jarvis/jarvis.db` (Linux) ou `%APPDATA%\jarvis\jarvis.db` (Windows):
 
+O esquema abaixo é uma base de referência, ainda não implementada. E10–E12 do plano também exigem identidade imutável do cofre por perfil, propostas persistidas e registro de tentativas de aplicação. As migrações devem preservar ordem das mensagens, modelo utilizado e estados de interrupção. Conhecimento consolidado continua nas notas do vault.
+
 ```sql
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
@@ -119,8 +134,10 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
-    role TEXT CHECK(role IN ('user', 'assistant', 'system')) NOT NULL,
-    content TEXT NOT NULL,
+    role TEXT CHECK(role IN ('user', 'assistant', 'system', 'tool')) NOT NULL,
+    content TEXT,
+    tool_calls_json TEXT,
+    tool_call_id TEXT,
     token_usage_prompt INTEGER DEFAULT 0,
     token_usage_completion INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -132,7 +149,7 @@ CREATE TABLE IF NOT EXISTS messages (
 
 ## 5. Ferramentas do JARVIS (Tooling de Alta Eficiência)
 
-O modelo recebe acesso às seguintes primitivas funcionais:
+O modelo deverá receber acesso às seguintes primitivas funcionais. A memória utiliza as mesmas ferramentas de consulta e proposta; não há ferramenta de gravação ou aprovação exposta ao modelo.
 
 ### 5.1. Leitura e Navegação Relacional
 1. `list_notes(directory?: string)`: Retorna a árvore de arquivos e diretórios permitidos.
@@ -142,7 +159,11 @@ O modelo recebe acesso às seguintes primitivas funcionais:
 
 ### 5.2. Escrita Propositiva (Determinística)
 5. `propose_block_replace(relative_path: string, base_hash: string, search_block: string, replace_block: string)`: Propõe alteração pontual no arquivo baseada em correspondência de bloco.
-6. `propose_create(relative_path: string, content: string)`: Propõe a criação de uma nova nota. Falha se o arquivo já existir.
+6. `propose_create(relative_path: string, content: string)`: Prepara conteúdo e diff para uma nova nota, sem gravar. Falha se o arquivo já existir; a ausência do destino deve ser garantida novamente na aplicação aprovada.
+
+### 5.3. Ciclo de memória
+
+Buscar registros relacionados → ler suas fontes → preparar criação ou atualização com origem e contexto → mostrar a proposta → aguardar aprovação → validar/aplicar → reindexar. Confirmar “memória salva” somente após sucesso. A recuperação deve funcionar após reinício, em sessão sem histórico anterior, consultando a nota gravada.
 
 ---
 
@@ -152,7 +173,7 @@ O modelo recebe acesso às seguintes primitivas funcionais:
   [ JARVIS emite propose_block_replace ]
                    │
                    ▼
-  [ Daemon valida correspondência exata de search_block ]
+  [ Daemon valida correspondência única de search_block ]
                    │
                    ▼
   [ Daemon computa Unified Diff estruturado em memória ]
@@ -178,6 +199,8 @@ O modelo recebe acesso às seguintes primitivas funcionais:
 
 ## 7. Estrutura do Repositório (NPM Workspaces)
 
+A árvore abaixo é ilustrativa da divisão de responsabilidades. O mapa de arquivos de implementação atualizado está na seção 5.1 de [PLANO.md](../PLANO.md); serviços de perfil e persistência operacional ficam no daemon.
+
 ```
 jarvis/
 ├── package.json               # Workspaces: ["packages/*"]
@@ -188,12 +211,12 @@ jarvis/
 │   │   │   ├── vault-fs.ts    # Sandbox de sistema de arquivos e hashes
 │   │   │   ├── graph-index.ts # Parser de [[wikilinks]] e backlinks
 │   │   │   ├── diff.ts        # Motor determinístico de Search & Replace
-│   │   │   ├── profiles.ts    # Gestão de workspaces/perfis
 │   │   │   └── types.ts       # Contratos e tipos comuns
 │   ├── daemon/                # Backend da aplicação
 │   │   ├── src/
 │   │   │   ├── server.ts      # Servidor HTTP / SSE
 │   │   │   ├── db.ts          # Driver SQLite com better-sqlite3
+│   │   │   ├── profiles.ts    # Gestão de perfis e identidade do vault
 │   │   │   ├── agent.ts       # Loop ReAct e execução de ferramentas
 │   │   │   ├── openrouter.ts  # Cliente de inferência OpenRouter
 │   │   │   └── index.ts       # Ponto de entrada CLI/Daemon

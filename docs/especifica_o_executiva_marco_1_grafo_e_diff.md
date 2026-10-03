@@ -1,24 +1,26 @@
 # JARVIS — Especificação Executiva do Marco 1 (M1)
 
 **Foco:** Indexador de Grafo Semântico e Motor de Edição (Patch/Diff)
-**Status:** Decisões Ratificadas — Pronto para Implementação
-**Data:** 2026-10-02
+**Status:** Especificação revisada; implementação parcial, com pendências em E04–E07
+**Data:** 2026-10-03
+
+Contratos atuais em [ARQUITETURA.md](../ARQUITETURA.md) e execução em [PLANO.md](../PLANO.md). O vault de destino ainda não está conectado. Templates e tags usados nos testes não definem sua organização real.
 
 ## 1. O Que É o Entregável do Marco 1?
 
 O Marco 1 dotará o JARVIS de seus sentidos de percepção relacional e de suas habilidades de alteração precisa em disco. Ele é composto por dois módulos isolados dentro do pacote `@jarvis/core`:
 
-1.  **O Indexador de Grafo (`graph-index.ts`):** Um motor que varre as notas (utilizando o `vault-fs` criado no M0), extrai links e constrói um mapa em memória. Graças à taxonomia da equipe, será um **Grafo Semântico Dirigido**.
+1.  **O Indexador de Grafo (`graph-index.ts`):** Um motor que varre notas permitidas pelo `vault-fs`, extrai links e constrói um mapa em memória para recuperação de conhecimento. Deve funcionar com Markdown genérico e reconhecer relações semânticas específicas quando as convenções do vault as utilizarem.
 2.  **O Motor de Patch/Diff (`patch-engine.ts`):** Um módulo que recebe blocos de "Busca e Substituição" (Search & Replace) gerados pela IA, localiza o texto exato na nota, aplica a mudança em memória e gera um Diff Unificado visual para o usuário.
 
 ---
 
-## 2. A Ontologia do Cofre (A Grande Vantagem da Equipe)
+## 2. Organização do conhecimento no vault
 
-O nosso indexador não construirá um mapa genérico. Ao analisar cada arquivo `.md`, ele fará o *parsing* da estrutura rígida dos headers e footers definidos pela equipe e classificará cada aresta (link) do grafo.
+O indexador deve recuperar texto, links, tags Unicode e propriedades de frontmatter sem exigir um template. As regras de headers, footers e taxonomia serão adaptadas às convenções encontradas no vault de destino. Notas sem tags, frontmatter ou relações tipadas continuam válidas e pesquisáveis.
 
 ### 2.1. Tipos de Relações Extraídas
-Com base nas regras canônicas da equipe, o Indexador reconhecerá e tipará os seguintes wikilinks:
+Os exemplos históricos de área/conceito incluem as relações abaixo. Seu reconhecimento é opcional conforme o conteúdo; links sem classificação permanecem genéricos.
 
 **Nas Notas de Área (Hierarquia de Conjuntos):**
 *   `broader_field`: Conjunto que contém a área (Pai).
@@ -87,18 +89,22 @@ export interface PatchEngine {
 As seguintes abordagens arquiteturais foram definidas para a implementação deste marco:
 
 ### Decisão 1: Estratégia de Parsing (RegEx Baseada em Linhas)
-*   **A Escolha:** Utilizaremos Expressões Regulares iterando linha por linha, aproveitando a estrutura de templates fixos da equipe.
-*   **Justificativa:** Como os metadados residem em linhas estritas (ex: `**Presupposed Concept**: ...`), a RegEx garante extrema velocidade. O parsing vai ignorar separadores textuais (vírgulas, espaços) e varrer a linha inteira em busca de padrões `[[link]]`, isentando a equipe de manter uma formatação micro-gerenciada e rigorosa na separação dos links.
+*   **A Escolha:** Parsing de Markdown e links com regras explícitas para código, aliases e fragmentos; parser YAML para frontmatter. Expressões regulares por linha podem reconhecer taxonomias opcionais dos templates.
+*   **Justificativa:** O parser precisa aceitar a organização existente, preservar tags com acentos e evitar transformar exemplos em blocos de código em relações de conhecimento. As fixtures devem incluir múltiplos domínios e notas livres.
 
 ### Decisão 2: Motor de Diff (Match Tolerante a Espaços)
 *   **A Escolha:** O motor normalizará espaços em branco e quebras de linha repetidas tanto no arquivo original quanto no bloco gerado pelo LLM antes da comparação de "Buscar e Substituir".
 *   **Justificativa:** LLMs frequentemente cometem erros de indentação ou adicionam espaços invisíveis ao devolver o texto. Esta abordagem é simples de codificar e aumenta dramaticamente a taxa de sucesso das alterações atômicas sem comprometer o texto real do usuário.
 
 ### Decisão 3: Indexação e Armazenamento (Memória Viva)
-*   **A Escolha:** O índice do grafo será remontado inteiramente na RAM a cada inicialização do JARVIS.
-*   **Justificativa:** Em conjunto com a Decisão 1 (RegEx iterativa), a leitura de milhares de arquivos no Node.js é resolvida na escala de dezenas a centenas de milissegundos. Adicionar cache persistente (SQLite) adicionaria complexidade prematura e riscos de dessincronização (ex: alteração de arquivo pelo Git enquanto o JARVIS está offline). A memória viva garante que o Grafo sempre reflita a "verdade em disco" (Source of Truth) de forma instantânea.
+*   **A Escolha:** Reconstruir o índice em RAM na inicialização e antes de cada turno; atualizar a nota após gravação própria aprovada.
+*   **Justificativa:** O índice é derivado reconstruível. A memória durável permanece em Markdown. Mudanças externas entram no turno seguinte; leituras e validações de propostas consultam o disco. Custo de reconstrução e qualidade de recuperação devem ser medidos antes de adotar cache incremental ou outra estratégia.
+
+### Decisão 4: Recuperação com fontes
+
+Busca textual por título/caminho, conteúdo, tags e propriedades fornece notas-semente; outlinks/backlinks expandem o contexto. Retornar caminhos, trechos/seções e hashes, com limites de volume. Notas ambíguas ou ausentes precisam de diagnóstico explícito. O índice não deve apresentar inferências do modelo como fatos armazenados.
 
 ---
 
 ## 5. Próximo Passo
-Com as especificações fechadas, o desenvolvimento do **Marco 1** focará primeiro na bateria de testes unitários (TDD) para validar os conectores lógicos do Grafo e a resiliência do Motor de Patch.
+Executar E04–E07 do plano: corrigir literalidade e ambiguidade de patches, produzir unified diff, completar parser/grafo/busca e preparar propostas sem gravação. Validar com fixtures agora e com as convenções reais após conectar o vault. Memórias aprovadas devem entrar no índice e ser recuperáveis sem o histórico do chat que as originou.

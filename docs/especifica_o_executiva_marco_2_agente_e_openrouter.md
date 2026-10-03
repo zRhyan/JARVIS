@@ -1,12 +1,14 @@
 # JARVIS — Especificação Executiva do Marco 2 (M2)
 
 **Foco:** Conexão OpenRouter, Loop ReAct e Consolidação do Handoff de Edição
-**Status:** Decisões Ratificadas — Pronto para Implementação
-**Data:** 2026-10-02
+**Status:** Especificação revisada; protótipo de streaming implementado, loop de ferramentas pendente
+**Data:** 2026-10-03
+
+Contratos atuais em [ARQUITETURA.md](../ARQUITETURA.md); execução em E08/E09 de [PLANO.md](../PLANO.md). O vault de destino ainda não está disponível neste computador.
 
 ## 1. O Que É o Entregável do Marco 2?
 
-O Marco 2 dotará o JARVIS de raciocínio. Ele criará o pacote `@jarvis/daemon`, que fará a ponte entre os motores isolados que criamos no M0 e M1 e a API do OpenRouter. A arquitetura de escrita foi definitivamente consolidada: o JARVIS operará de forma estritamente autônoma (headless) em *background*, utilizando **I/O direto e seguro no disco**, rejeitando a dependência da Obsidian CLI para evitar gargalos de IPC e interrupções na interface gráfica do usuário.
+O Marco 2 conectará os motores do core ao OpenRouter pelo pacote `@jarvis/daemon`, já existente como protótipo. O agente deverá interpretar perguntas, buscar e ler notas, responder com fontes e preparar novas memórias ou atualizações de conhecimento. A execução do backend pode ocorrer em segundo plano, sem depender da Obsidian CLI. Toda gravação de nota permanece condicionada à aprovação humana explícita; execução em segundo plano não significa escrita autônoma.
 
 O entregável consiste em:
 
@@ -16,17 +18,27 @@ O entregável consiste em:
 
 ## 2. Catálogo de Ferramentas Expostas (Tools)
 
-Todas as ferramentas operam nativamente na memória e no sistema de arquivos local, garantindo performance extrema (milissegundos) e invisibilidade.
+Ferramentas de consulta usam o core e o vault configurado. Ferramentas de proposta preparam dados em memória, sem gravar notas. Argumentos precisam de validação em runtime; desempenho será medido na homologação.
 
 ### A. Ferramentas de Percepção (Raciocínio via `jarvis/core`)
-* `list_notes()`: Retorna a árvore de diretórios permitidos.
-* `read_note(path)`: Retorna o conteúdo exato e o Hash SHA-256 da leitura.
-* `get_graph_neighborhood(path)`: Retorna outlinks (Taxonomia) e backlinks.
-* `search_notes(query)`: Busca léxica/RegEx.
+* `list_notes(directory?)`: Retorna notas permitidas no diretório solicitado.
+* `read_note(relative_path)`: Retorna conteúdo normalizado e SHA-256 da leitura.
+* `get_graph_neighborhood(relative_path)`: Retorna outlinks e backlinks, com relações tipadas quando presentes.
+* `search_notes(query)`: Busca textual limitada, sem regex arbitrária no MVP; retorna trechos, caminhos e origem para fundamentar respostas.
 
 ### B. Ferramentas de Ação (Escrita baseada em Propostas)
-* `propose_block_replace(path, search_block, replace_block)`: A IA propõe uma mudança. O daemon computa o Diff usando o `PatchEngine` (M1). Ao aprovar, o `VaultFSSandbox` (M0) grava a alteração no disco.
-* `propose_create(path, content)`: Cria uma nova nota. O daemon utiliza a gravação atômica direta.
+* `propose_block_replace(relative_path, base_hash, search_block, replace_block)`: Prepara conteúdo e diff contra a versão lida. Após aprovação, o backend revalida o hash e aplica a proposta se continuar válida.
+* `propose_create(relative_path, content)`: Prepara a criação sem gravar. Após aprovação, o backend garante que o destino continua ausente e publica a nova nota sem sobrescrever outra.
+
+### C. Respostas e memória de conhecimento
+
+1. Interpretar a solicitação e recuperar apenas contexto relevante, expandindo links quando necessário.
+2. Referenciar as notas utilizadas e distinguir evidência, inferência e informação não encontrada.
+3. Ao preparar memória, buscar registros relacionados para escolher criação ou atualização e evitar duplicação; preservar a origem e o contexto do conhecimento.
+4. Exibir a proposta e aguardar aprovação; somente a aplicação bem-sucedida permite confirmar que a memória foi salva.
+5. Após gravação, atualizar o índice. Uma nova sessão deve recuperar a memória pelo vault, mesmo sem acesso ao chat original.
+
+Não há ferramenta de aprovação ou gravação direta acessível ao modelo. `VAULT.md` pode orientar organização e templates, sem dispensar aprovação ou ampliar os limites de acesso. Os exemplos de física/EPTA não definem o domínio do produto.
 
 ## 3. Decisões Técnicas Ratificadas
 
@@ -41,12 +53,9 @@ A fundação do Marco 2 está cimentada nas seguintes escolhas:
 * **Justificativa:** O raciocínio do modelo e as chamadas de ferramentas (*tool calling*) ocorrem de forma invisível nos bastidores para evitar o colapso do parser JSON. Apenas a resposta de conversação final ao usuário é transmitida via *Server-Sent Events* (SSE), garantindo a sensação de fluidez na interface.
 
 ### Decisão 3: Rejeição da Obsidian CLI para Escrita (I/O Direto Vence)
-* **A Escolha:** Escrita Direta no Disco (Opção C), utilizando o `VaultFSSandbox` (M0) e o motor nativo do Obsidian (CodeMirror 6) para a reconciliação visual.
-* **Justificativa:** Uma análise profunda revelou que a Obsidian CLI possui três falhas críticas inaceitáveis para um agente:
-  1. **Invisibilidade Quebrada:** Rodar comandos CLI com o aplicativo fechado força a abertura da janela (GUI) em tela cheia, roubando o foco do usuário no sistema operacional.
-  2. **Fragilidade de Transporte:** Injetar blocos longos de Markdown com aspas e quebras de linha via interpretador de linha de comando (*shell*) frequentemente corrompe o texto.
-  3. **Reatividade do Obsidian:** O motor moderno do Obsidian (CodeMirror 6) provou-se altamente elástico. Ao usarmos o `VaultFSSandbox` para sobrescrever um arquivo atômicamente no disco, o Obsidian detecta a alteração e atualiza a interface visual perfeitamente, sem perder o foco do cursor ou quebrar o histórico de *undo/redo*. Portanto, a intervenção de APIs gráficas é redundante e inferior à nossa Sandbox de disco.
+* **A Escolha:** Após aprovação, gravar pelo `VaultFSSandbox`, sem automação da interface ou dependência da Obsidian CLI.
+* **Justificativa:** Manter o acesso ao cofre sob um único contrato de validação e I/O, sem transportar conteúdo por comandos de shell. A atualização visual no Obsidian e seus efeitos sobre cursor/undo precisam ser testados em M5; não há garantia já comprovada no repositório.
 
 ## 4. Próximo Passo
 
-O desenvolvimento do pacote `@jarvis/daemon` iniciará com a instalação do SDK da OpenAI, a configuração das chamadas de *Tool Calling* mapeando os motores do Marco 1 e a construção do Loop ReAct do Agente.
+Completar o registro/executor de ferramentas e o loop do agente com limites de contexto, rodadas e cancelamento. Validar com provedor simulado e cofre descartável, sem depender do vault real para os testes de desenvolvimento. A aplicação aprovada e a recuperação de memória após reinício serão concluídas em E12; o conteúdo e as convenções do vault de destino serão homologados em E17.

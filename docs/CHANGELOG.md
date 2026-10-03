@@ -2,8 +2,23 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [Documentação] - 2026-10-03
+
+### Atualizado
+
+- Alinhados os documentos de entrada, arquitetura detalhada, roadmap e especificações M0/M1/M2 ao vault de destino como cérebro RAG e memória persistente do JARVIS.
+- Registrado que o vault ainda não está neste computador. Exemplos de tags e templates não definem seu domínio; a primeira conexão fará inventário e validação somente de leitura.
+- Confirmada a regra de aprovação explícita para toda criação/edição de nota, incluindo memória. O sistema só confirma salvamento após aplicação bem-sucedida.
+- Separados conhecimento em Markdown, histórico/estado operacional em SQLite e índices derivados reconstruíveis.
+- Acrescentados critérios de recuperação com fontes e memória após reinício em nova sessão, sem o histórico original, e distinção entre validação com fixtures e homologação real.
+- Harmonizados os contratos de criação/edição, atualização do grafo e identidade do cofre por perfil com as 17 entregas do plano.
+
+### Estado da implementação
+
+Esta revisão altera documentação. M0 e M1 continuam parciais; M2 mantém um protótipo de streaming com ferramentas desconectadas; M3–M5 permanecem pendentes. As entradas abaixo preservam o status declarado em 2026-10-02, que foi contestado pela [auditoria](AUDITORIA.md). O estado atual é mantido em [PLANO.md](../PLANO.md).
+
 ## [Marco 1] - 2026-10-02
-### Status: Concluído
+### Status declarado na época: Concluído; revisado como parcial em 2026-10-03
 **Indexador de Grafo e Motor de Patches (Diff)**
 
 ### Adicionado
@@ -19,7 +34,7 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 ---
 
 ## [Marco 0] - 2026-10-02
-### Status: Concluído
+### Status declarado na época: Concluído; revisado como parcial em 2026-10-03
 **Fundação e Sandbox do Sistema de Arquivos**
 
 ### Adicionado

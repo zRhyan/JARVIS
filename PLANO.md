@@ -10,6 +10,8 @@ O repositório contém os pacotes `core` e `daemon`. O núcleo tem componentes t
 
 **Esclarecimento de produto em 2026-10-03:** o JARVIS deve usar um vault determinado como cérebro RAG e memória persistente de conhecimento. Esse vault ainda não está disponível neste computador. Tags e notas dos testes são exemplos técnicos, não requisitos de domínio. A implementação com fixtures pode avançar; integração com as convenções e o conteúdo reais permanece pendente até o vault ser disponibilizado.
 
+**Decisões fechadas:** conhecimento e memórias consolidadas ficam no vault; histórico bruto e estado operacional ficam no SQLite local. Toda criação/edição de nota exige aprovação explícita. O sistema só informa que uma memória foi salva após aplicação bem-sucedida. Estas regras valem também para as especificações detalhadas em `docs/`.
+
 | Marco | Estado observado | O que falta para o objetivo do marco |
 | --- | --- | --- |
 | M0: fundação e sandbox | Implementação parcial, com testes básicos passando | Fechar lacunas de isolamento, durabilidade e configuração do projeto |
@@ -159,6 +161,15 @@ Ficam fora da implementação inicial: aplicativo Tauri, servidor MCP, busca vet
 O trabalho de código pode avançar com fixtures. Quando o vault estiver disponível, executar uma primeira conexão somente para leitura: confirmar caminho/identidade, inventariar notas, tamanho, links, anexos e convenções, ler `VAULT.md` se existir e validar perguntas representativas. No MVP, o daemon precisa acessar esse diretório no sistema de arquivos; a forma de trazê-lo ou disponibilizá-lo neste computador ainda não foi definida.
 
 Nenhuma pasta de memória, taxonomia temática ou organização de notas será imposta antes de conhecer o vault. A aceitação deve incluir consulta ao conteúdo existente e criação/atualização de memória recuperável após reinício. A regra já definida na arquitetura original e reafirmada pelo usuário é: o JARVIS prepara a proposta, o usuário aprova e só então a memória é gravada no vault. Proposta rejeitada ou pendente não é conhecimento salvo.
+
+| Validação | Pode ocorrer agora | Depende do vault real |
+| --- | --- | --- |
+| Segurança, patches, propostas, reinício e isolamento | Sim, com fixtures descartáveis | Repetir os cenários pertinentes no ambiente de homologação |
+| Recuperação com fontes e memória entre sessões | Sim, com fatos e fontes conhecidos nas fixtures | Verificar perguntas representativas do conteúdo de destino |
+| Convenções de notas, tags, pastas e frontmatter | Testar comportamento genérico e templates opcionais | Inspecionar e respeitar as convenções existentes |
+| Qualidade de recuperação e desempenho | Medir cenários sintéticos declarados | Medir no tamanho e organização reais; registrar lacunas |
+
+O aceite com fixtures não encerra a homologação do vault de destino. Sua ausência não impede as entregas de infraestrutura, core, agente e interface, desde que não dependam de supor seu conteúdo.
 
 ### 5.1. Organização dos arquivos
 
@@ -452,6 +463,7 @@ Os comandos de E02 em diante dependem dos scripts criados por E01. Comandos de w
 - [ ] Implementar aprovar/rejeitar por ID, sem reenviar texto editável como comando de gravação; desabilitar ações enquanto a operação está em andamento.
 - [ ] Renderizar estados `PENDING`, `APPLIED`, `REJECTED` e `STALE`; erro de rede não deve ser interpretado como rejeição ou sucesso.
 - [ ] Ao reencontrar proposta obsoleta, oferecer uma nova solicitação ao agente; nunca aplicar automaticamente sobre a versão atual.
+- [ ] Distinguir visualmente “memória proposta” de “memória salva”; confirmar salvamento somente após `APPLIED`, inclusive após reconectar e consultar o estado do servidor.
 - [ ] Testar aprovação repetida, rejeição, conflito e resposta tardia ao trocar de conversa, com conteúdo real do arquivo verificado pelo E2E.
 - [ ] Validar teclado, legibilidade do diff e feedback de erro; registrar M4 somente após o fluxo completo.
 
@@ -496,7 +508,7 @@ Os comandos de E02 em diante dependem dos scripts criados por E01. Comandos de w
 
 ### 5.4. Como registrar o avanço
 
-Ao encerrar cada entrega, adicionar uma linha à tabela abaixo. Manter o status “não iniciada” até existir implementação; documentos e scaffolding, isoladamente, não encerram a entrega.
+Ao encerrar cada entrega, atualizar sua linha na tabela abaixo com estado, data e referência da evidência. Manter o status “não iniciada” até existir implementação; documentos e scaffolding, isoladamente, não encerram a entrega.
 
 | Entrega | Estado inicial | Evidência exigida para conclusão |
 | --- | --- | --- |
@@ -511,9 +523,9 @@ Ao encerrar cada entrega, adicionar uma linha à tabela abaixo. Manter o status 
 | E09 | Não iniciada | Fluxo LLM simulado completo com limites/cancelamento |
 | E10 | Não iniciada | Perfis persistentes e isolados |
 | E11 | Não iniciada | Histórico/propostas recuperados após reinício |
-| E12 | Não iniciada | Aprovação, conflito e recuperação de aplicação passando |
+| E12 | Não iniciada | Aprovação/conflito e memória recuperada pelo vault após reinício |
 | E13 | Não iniciada | API autenticada e streaming por perfil passando |
 | E14 | Não iniciada | SPA compilada e cliente de eventos validado |
 | E15 | Não iniciada | Configuração/chat/histórico aprovados no E2E |
 | E16 | Não iniciada | Revisão/aplicação/rejeição/conflito aprovados no E2E |
-| E17 | Não iniciada | Matriz final de aceite e homologação registrada |
+| E17 | Não iniciada | Matriz final de aceite, recuperação e memória homologadas no vault real |

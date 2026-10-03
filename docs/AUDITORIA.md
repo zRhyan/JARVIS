@@ -2,6 +2,8 @@
 
 Data: 2026-10-03. Código de referência: commit `2ddfc32`, com os documentos de entrada ainda não commitados. Escopo: fontes, testes, manifests, configurações TypeScript, arquitetura, roadmap, especificações M0/M1/M2 e changelog.
 
+**Nota de atualização documental:** este relatório preserva as evidências e os textos examinados no momento da auditoria. As especificações e o changelog foram revisados posteriormente em 2026-10-03 para explicitar o vault como memória de conhecimento, a aprovação de toda gravação e os contratos consolidados em [ARQUITETURA.md](../ARQUITETURA.md). Assim, algumas divergências documentais descritas na seção 5 já foram esclarecidas; os defeitos de código continuam pendentes em [PLANO.md](../PLANO.md). A revisão documental não representa nova execução dos testes nem correção da implementação.
+
 **Resultado:** há componentes funcionais de M0/M1 e um protótipo de streaming em M2. Nenhum desses marcos atende integralmente aos seus critérios de aceite. A sandbox permite acesso fora do cofre e a diretórios protegidos em cenários reproduzidos no Windows. O agente ainda não consulta o cofre por ferramentas.
 
 ## 1. O que está feito e foi verificado
