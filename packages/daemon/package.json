@@ -1,9 +1,12 @@
 {
   "name": "@jarvis/daemon",
   "version": "1.0.0",
+  "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "tsx src/chat-cli.ts"
+    "dev": "tsx src/chat-cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@jarvis/core": "1.0.0",
@@ -15,3 +18,4 @@
     "typescript": "^5.4.2"
   }
 }
+

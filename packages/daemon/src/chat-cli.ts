@@ -1,11 +1,11 @@
 // packages/daemon/src/chat-cli.ts
 
 import * as readline from 'readline';
-import { JarvisAgent } from './agent-loop';
-import { GraphIndex } from '@jarvis/core/src/graph-index';
-import { applyPatch } from '@jarvis/core/src/patch-engine';
+import { JarvisAgent } from './agent-loop.js';
+import { GraphIndex, applyPatch } from '@jarvis/core';
 import * as dotenv from 'dotenv';
 import type OpenAI from 'openai';
+
 
 // Carrega as chaves de um arquivo .env na raiz de packages/daemon
 dotenv.config();

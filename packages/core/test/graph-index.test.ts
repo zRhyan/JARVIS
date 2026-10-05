@@ -1,6 +1,9 @@
 // packages/core/test/graph-index.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { resolve } from 'node:path';
+import { rm, mkdir } from 'node:fs/promises';
 import { GraphIndex } from '../src/graph-index.js';
+import { VaultFSSandbox } from '../src/vault-fs.js';
 
 describe('GraphIndex', () => {
   let graph: GraphIndex;
@@ -55,5 +58,92 @@ describe('GraphIndex', () => {
     expect(node.taxonomy.presupposedConcepts).toEqual(['Massa', 'Aceleração']);
     expect(node.taxonomy.domainFields).toEqual(['Mecânica Clássica']);
     expect(node.taxonomy.derivedConcepts).toEqual(['Trabalho', 'Energia Cinética']);
+  });
+
+  it('Deve retornar outlinks classificados por tipo semântico (getOutlinks)', () => {
+    const note = `
+## Map of Content / Tags: #conceito
+- Concept Taxonomy:
+	- **Presupposed Concept**: [[Massa]]
+	- **Derived Concepts**: [[Energia]]
+
+Texto livre citando um link genérico para [[Albert Einstein]] em outro contexto.
+    `;
+
+    graph.addNote('conceitos/forca.md', note);
+    const outlinks = graph.getOutlinks('conceitos/forca.md');
+
+    expect(outlinks).toHaveLength(3);
+    expect(outlinks).toContainEqual({ targetPath: 'Massa', semanticType: 'presupposed_concept' });
+    expect(outlinks).toContainEqual({ targetPath: 'Energia', semanticType: 'derived_concept' });
+    expect(outlinks).toContainEqual({ targetPath: 'Albert Einstein', semanticType: 'generic' });
+  });
+
+  it('Deve mapear e recuperar backlinks com flexibilidade de extensão e caminho (getBacklinks)', () => {
+    const noteA = `- **Presupposed Concept**: [[Massa|Massa Inercial]]`;
+    const noteB = `- **Broader Fields**: [[Massa]]`;
+    const noteC = `- Texto sem links`;
+
+    graph.addNote('conceitos/forca.md', noteA);
+    graph.addNote('cinematica.md', noteB);
+    graph.addNote('outra.md', noteC);
+
+    // Consulta por nome puro
+    const backlinksNome = graph.getBacklinks('Massa');
+    expect(backlinksNome).toHaveLength(2);
+    expect(backlinksNome).toContain('conceitos/forca.md');
+    expect(backlinksNome).toContain('cinematica.md');
+
+    // Consulta por nome com .md
+    const backlinksMd = graph.getBacklinks('Massa.md');
+    expect(backlinksMd).toEqual(backlinksNome);
+
+    // Consulta por subcaminho
+    const backlinksPath = graph.getBacklinks('conceitos/Massa.md');
+    expect(backlinksPath).toEqual(backlinksNome);
+
+    // Nota que ninguém referencia
+    expect(graph.getBacklinks('outra.md')).toEqual([]);
+  });
+
+  it('Deve atualizar backlinks corretamente se uma nota for re-indexada com novo conteúdo', () => {
+    graph.addNote('nota1.md', 'Link para [[AlvoAntigo]]');
+    expect(graph.getBacklinks('AlvoAntigo')).toEqual(['nota1.md']);
+
+    // Reindexa alterando o link
+    graph.addNote('nota1.md', 'Link para [[AlvoNovo]]');
+    expect(graph.getBacklinks('AlvoAntigo')).toEqual([]);
+    expect(graph.getBacklinks('AlvoNovo')).toEqual(['nota1.md']);
+  });
+
+  describe('Integração com VaultFSSandbox (buildIndex)', () => {
+    const TEST_VAULT = resolve(__dirname, 'fixtures', 'graph-vault');
+    let sandbox: VaultFSSandbox;
+
+    beforeEach(async () => {
+      await rm(TEST_VAULT, { recursive: true, force: true });
+      await mkdir(TEST_VAULT, { recursive: true });
+      sandbox = new VaultFSSandbox(TEST_VAULT);
+    });
+
+    afterEach(async () => {
+      await rm(TEST_VAULT, { recursive: true, force: true });
+    });
+
+    it('Deve varrer e indexar todas as notas do cofre automaticamente', async () => {
+      await sandbox.writeAtomic('fisica.md', '## Map of Content\n- **Broader Fields**: [[Ciência]]');
+      await sandbox.writeAtomic('conceitos/massa.md', '## Map of Content\n- **Domain Fields**: [[fisica]]');
+
+      await graph.buildIndex(sandbox);
+
+      const allNodes = graph.getAllNodes();
+      expect(allNodes).toHaveLength(2);
+
+      const fisicaBacklinks = graph.getBacklinks('fisica');
+      expect(fisicaBacklinks).toContain('conceitos/massa.md');
+
+      const cienciaBacklinks = graph.getBacklinks('Ciência');
+      expect(cienciaBacklinks).toContain('fisica.md');
+    });
   });
 });

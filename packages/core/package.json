@@ -1,14 +1,1 @@
-{
-"name": "@jarvis/core",
-"version": "1.0.0",
-"type": "module",
-"main": "./src/index.ts",
-"scripts": {
-"test": "vitest run",
-"test:watch": "vitest"
-},
-"dependencies": {},
-"devDependencies": {
-"@types/node": "^20.0.0"
-}
-}
+{"name":"@jarvis/core","version":"1.0.0","type":"module","main":"./src/index.ts","scripts":{"test":"vitest run","test:watch":"vitest"},"dependencies":{"diff":"^9.0.0"},"devDependencies":{"@types/diff":"^8.0.0","@types/node":"^20.0.0"}}

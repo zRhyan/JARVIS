@@ -10,11 +10,17 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 - Módulo `GraphIndex` (`graph-index.ts`) implementado em memória para extração de taxonomia.
   - Suporte total ao template da equipe (Notas de Área e Notas de Conceito).
   - Captura hierárquica precisa de `Broader Fields`, `Presupposed Concepts`, `Derived Concepts`, etc.
-  - Resolução nativa de aliases nos Wikilinks do Obsidian (processa `[[Arquivo|Alias]]` como `Arquivo`).
+  - Resolução nativa de aliases e âncoras nos Wikilinks do Obsidian (processa `[[Arquivo|Alias]]` e `[[Arquivo#Seção]]` como `Arquivo`).
+  - Mapeamento e consulta flexível de `backlinks` (`getBacklinks`), permitindo expansão de 1-salto no grafo.
+  - Varredura e indexação automatizada de todo o cofre em disco (`buildIndex`) integrada ao `VaultFSSandbox`.
+  - Classificação semântica tipada de links de saída (`getOutlinks`) via `SemanticLinkType`.
 - Módulo `PatchEngine` (`patch-engine.ts`) para aplicação de diffs e edição de arquivos.
   - Implementação do modelo Search/Replace tolerante a espaços em branco e quebras de linha (`\s+`).
   - Tratamento de exceções robusto contra alucinações da IA (`PatchNotFoundError`) e propostas mal delimitadas (`PatchAmbiguousError`).
-- Suítes de testes unitários (`graph-index.test.ts` e `patch-engine.test.ts`) para validação rigorosa de taxonomia e mutação de texto.
+  - Geração determinística de `unifiedDiff` padrão Git via biblioteca `diff`.
+  - Contrato formal `PatchResult` (`isSuccess`, `patchedContent`, `unifiedDiff`, `errorMessage`) para consumo seguro pela UI/Daemon.
+- Suítes de testes unitários expandidas (`graph-index.test.ts` e `patch-engine.test.ts`), totalizando 18 testes automatizados no `@jarvis/core`.
+- Padronização do runner de testes e checagem estrita de tipos TypeScript (NodeNext) em todo o monorepo.
 
 ---
 
