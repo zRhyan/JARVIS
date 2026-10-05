@@ -87,4 +87,19 @@ describe('Patch Engine', () => {
     expect(result.errorMessage).toBeDefined();
     expect(result.errorMessage).toContain('SEARCH block não encontrado');
   });
+
+  it('Deve anexar texto ao final do arquivo quando searchBlock for $END', () => {
+
+    const original = '# Título\nConteúdo existente.';
+    const result = applyPatch(original, '$END', '## Nova Seção');
+
+    expect(result).toBe('# Título\nConteúdo existente.\n## Nova Seção');
+  });
+
+  it('Deve prefixar texto no início do arquivo quando searchBlock for $START', () => {
+    const original = '# Título';
+    const result = applyPatch(original, '$START', '<!-- banner -->');
+
+    expect(result).toBe('<!-- banner -->\n# Título');
+  });
 });

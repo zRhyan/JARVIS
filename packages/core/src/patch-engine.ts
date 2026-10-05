@@ -26,9 +26,20 @@ export interface PatchResult {
  * Lança PatchNotFoundError ou PatchAmbiguousError caso ocorra erro.
  */
 export function applyPatch(originalContent: string, searchBlock: string, replaceBlock: string): string {
+  if (searchBlock === '$END' || searchBlock === 'end') {
+    const separator = originalContent.endsWith('\n') ? '' : '\n';
+    return originalContent + separator + replaceBlock;
+  }
+
+  if (searchBlock === '$START' || searchBlock === 'start') {
+    const separator = replaceBlock.endsWith('\n') ? '' : '\n';
+    return replaceBlock + separator + originalContent;
+  }
+
   if (searchBlock.trim() === '') {
     throw new PatchNotFoundError();
   }
+
 
   // Escapa caracteres especiais do regex
   const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

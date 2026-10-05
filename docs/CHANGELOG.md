@@ -2,7 +2,37 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [Marco 2] - 2026-10-05
+### Status: Concluído
+**Runtime do Agente e Conexão OpenRouter**
+
+### Adicionado
+- Gerenciador de contexto do cofre (`vault-context.ts`):
+  - Suporte à configuração do cofre em tempo de execução via `VAULT_PATH` no `.env` (com cofre padrão estruturado).
+  - Inicialização conjunta do `VaultFSSandbox` e pré-carregamento do `GraphIndex`.
+  - Detecção e extração de regras de governança locais a partir de `VAULT.md`.
+- Catálogo formal das 6 ferramentas canônicas (`tool-registry.ts`) com JSON Schema estrito:
+  - Percepção: `list_notes`, `read_note`, `get_graph_neighborhood`, `search_notes`.
+  - Ação / Proposta: `propose_block_replace`, `propose_create`.
+- Motor de despacho e execução de ferramentas (`tool-executor.ts`):
+  - Execução segura contra a sandbox, busca léxica de notas e cálculo de diffs em memória.
+  - Criação atômica de notas e atualização dinâmica do grafo em tempo real.
+  - Fluxo de aprovação humana interativo (`onApproval`): transição de estados `PENDING` -> `APPLIED` / `REJECTED`, persistindo atômica e seguramente no disco apenas após confirmação explícita.
+  - Suporte resiliente a inserção e adição de conteúdo via tokens `$END` e `$START` no `PatchEngine`.
+- Loop ReAct multi-turn com abordagem híbrida (`agent-loop.ts`):
+  - Batching silencioso de raciocínio e execução sequencial de `tool_calls`.
+  - Streaming contínuo da resposta final conversacional via Server-Sent Events / Async Generator.
+  - Injeção contextual das regras do `VAULT.md` no prompt de sistema e blindagem contra alucinações de formato.
+- Interface de terminal interativa aprimorada (`chat-cli.ts`):
+  - Exibição de cabeçalho com estatísticas do cofre, logs de execução de tools e visualização colorida de Unified Diffs.
+  - Prompt interativo no terminal para revisão e aprovação humana de diffs em tempo real (`[S/n]`).
+- Bateria completa de testes automatizados para o daemon (`tool-registry.test.ts`, `tool-executor.test.ts`, `vault-context.test.ts`, `agent-loop.test.ts`), elevando o monorepo para 37 testes unitários 100% aprovados (20 no core, 17 no daemon).
+
+
+---
+
 ## [Marco 1] - 2026-10-02
+
 ### Status: Concluído
 **Indexador de Grafo e Motor de Patches (Diff)**
 
