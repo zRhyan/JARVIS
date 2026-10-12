@@ -271,6 +271,8 @@ export class ToolExecutor {
         path: notePath.trim(),
         baseHash: currentNote.contentHash,
         status: 'PENDING',
+        searchBlock,
+        replaceBlock,
         unifiedDiff: patchResult.unifiedDiff,
         patchedContent: patchResult.patchedContent,
         instructions: 'Proposta de alteração gerada com sucesso. O Diff unificado está pronto para revisão e aprovação.'

@@ -4,18 +4,23 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "tsx src/chat-cli.ts",
+    "dev": "tsx src/main.ts",
+    "chat": "tsx src/chat-cli.ts",
+    "profiles": "tsx src/profiles-cli.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@jarvis/core": "1.0.0",
-    "openai": "^4.28.0",
-    "dotenv": "^16.4.5"
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.12.5",
+    "openai": "^4.28.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.4",
     "tsx": "^4.7.1",
     "typescript": "^5.4.2"
   }
 }
-
