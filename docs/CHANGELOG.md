@@ -2,6 +2,28 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [File Watcher & Sincronização Automática do Grafo] - 2026-10-14
+### Status: Concluído
+**Detecção em Tempo Real de Alterações no Cofre, Reindexação Reativa do Grafo Semântico e Telemetria Discreta na Web UI**
+- Especificação executiva ratificada e homologada (`especifica_o_executiva_file_watcher_e_sincronizacao_automatica.md`).
+- **Camada Core (`@jarvis/core`):**
+  - Implementado o método `GraphIndex.removeNote(relativePath)` para purgar nós de notas e desassociar backlinks órfãos de forma atômica no grafo em memória.
+  - Novos testes unitários aprovados em `graph-index.test.ts`, totalizando 21 testes no core.
+- **Camada Daemon (`@jarvis/daemon`):**
+  - Adicionado `chokidar@^3.6.0` ao pacote daemon.
+  - Implementado o serviço `VaultWatcherService` (`vault-watcher.ts`) monitorando eventos `add`, `change` e `unlink` de notas Markdown com `awaitWriteFinish` (debounce de 200ms e pollInterval de 50ms) e política defensiva de retentativa contra leituras parciais do editor externo.
+  - Recarga reativa de convenções do `VAULT.md` sem necessidade de reiniciar o servidor.
+  - Gerenciamento limpo do ciclo de vida do watcher em `server.ts`: fechamento ao desativar/trocar perfil e no shutdown do daemon (`onClose`).
+  - Extensão do endpoint `GET /api/health` para expor o objeto `vault: { indexedNotes, lastSyncAt }`.
+  - Suíte completa de testes automatizados (`vault-watcher.test.ts`), elevando o daemon para 34 testes aprovados.
+- **Camada Web (`@jarvis/web`):**
+  - Atualização dos tipos tipados de API (`types/api.ts`) e do hook `useDaemonHealth` para consumir as métricas do cofre.
+  - Inclusão de indicador sutil e discreto no rodapé da `Sidebar.tsx`, exibindo o total de notas indexadas e o horário da última sincronização (`Sync HH:MM:SS`) de forma orgânica, sem interrupções ou popups invasivos.
+  - Build de produção validado (`tsc && vite build`) e testes aprovados.
+- **Qualidade do Monorepo:** 60 testes 100% aprovados (21 no core, 34 no daemon, 5 no web).
+
+---
+
 ## [Marco 4] - 2026-10-12
 ### Status: Concluído
 **Interface Web Local (Vite + React + Tailwind CSS), Chat SSE e Visualizador de Diffs**

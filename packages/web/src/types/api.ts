@@ -47,10 +47,16 @@ export interface Proposal {
   resolvedAt?: string | null;
 }
 
+export interface VaultStats {
+  indexedNotes: number;
+  lastSyncAt: string | null;
+}
+
 export interface HealthResponse {
   status: 'ok';
   uptimeSeconds: number;
   activeProfile: Profile | null;
+  vault?: VaultStats | null;
 }
 
 // Modelos curados padrão para alternância rápida na UI

@@ -9,9 +9,10 @@ import {
   Trash2, 
   Clock, 
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Database
 } from 'lucide-react';
-import type { Session } from '../../types/api';
+import type { Session, VaultStats } from '../../types/api';
 
 interface SidebarProps {
   sessions: Session[];
@@ -21,6 +22,7 @@ interface SidebarProps {
   onDeleteSession: (id: string) => Promise<void>;
   isDaemonOnline: boolean;
   daemonUptime: number;
+  vaultStats?: VaultStats | null;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
 }
@@ -33,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteSession,
   isDaemonOnline,
   daemonUptime,
+  vaultStats,
   isCollapsed,
   onToggleCollapse
 }) => {
@@ -202,6 +205,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Uptime:</span>
             <span>{isDaemonOnline ? formatUptime(daemonUptime) : 'Offline'}</span>
           </div>
+
+          {isDaemonOnline && vaultStats && (
+            <div className="flex items-center justify-between px-1 pt-1.5 border-t border-slate-800/40 text-[10px] text-slate-500">
+              <span className="flex items-center gap-1.5 text-slate-400">
+                <Database className="h-3 w-3 text-cyan-500/70 shrink-0" />
+                <span>{vaultStats.indexedNotes} {vaultStats.indexedNotes === 1 ? 'nota' : 'notas'}</span>
+              </span>
+              <span className="text-[9px] text-slate-500 truncate" title={vaultStats.lastSyncAt ? `Último sync: ${new Date(vaultStats.lastSyncAt).toLocaleString()}` : 'Pronto'}>
+                {vaultStats.lastSyncAt ? `Sync ${new Date(vaultStats.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Sincronizado'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </aside>

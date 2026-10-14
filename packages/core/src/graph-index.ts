@@ -97,6 +97,21 @@ export class GraphIndex {
     return this.nodes.get(normalizedPath);
   }
 
+  /**
+   * Remove uma nota do índice e desconecta todos os backlinks associados a ela.
+   * Retorna true se a nota existia e foi removida, false caso contrário.
+   */
+  public removeNote(path: string): boolean {
+    const normalizedPath = path.split('\\').join('/').replace(/^\.\//, '');
+    if (!this.nodes.has(normalizedPath)) {
+      return false;
+    }
+
+    this.removeBacklinksForSource(normalizedPath);
+    this.nodes.delete(normalizedPath);
+    return true;
+  }
+
   public getAllNodes(): NoteNode[] {
     return Array.from(this.nodes.values());
   }

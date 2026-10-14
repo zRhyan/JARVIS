@@ -4,11 +4,14 @@ import { resolve, join } from 'node:path';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { VaultFSSandbox, GraphIndex } from '@jarvis/core';
 
+import type { VaultWatcherService } from './vault-watcher.js';
+
 export interface VaultContext {
   vaultPath: string;
   sandbox: VaultFSSandbox;
   graph: GraphIndex;
   vaultConventions?: string;
+  watcher?: VaultWatcherService;
 }
 
 /**

@@ -116,6 +116,30 @@ Texto livre citando um link genérico para [[Albert Einstein]] em outro contexto
     expect(graph.getBacklinks('AlvoNovo')).toEqual(['nota1.md']);
   });
 
+  it('Deve remover nota do índice e limpar seus backlinks ao chamar removeNote', () => {
+    graph.addNote('origemA.md', 'Link para [[Destino]] e [[Destino2]]');
+    graph.addNote('origemB.md', 'Link para [[Destino]]');
+
+    expect(graph.getNote('origemA.md')).toBeDefined();
+    expect(graph.getBacklinks('Destino')).toHaveLength(2);
+    expect(graph.getBacklinks('Destino2')).toEqual(['origemA.md']);
+
+    // Remove origemA.md
+    const removed = graph.removeNote('origemA.md');
+    expect(removed).toBe(true);
+
+    // O nó não existe mais
+    expect(graph.getNote('origemA.md')).toBeUndefined();
+    expect(graph.getOutlinks('origemA.md')).toEqual([]);
+
+    // Backlinks de origemA foram purgados
+    expect(graph.getBacklinks('Destino')).toEqual(['origemB.md']);
+    expect(graph.getBacklinks('Destino2')).toEqual([]);
+
+    // Chamar removeNote para nota inexistente retorna false
+    expect(graph.removeNote('nao-existe.md')).toBe(false);
+  });
+
   describe('Integração com VaultFSSandbox (buildIndex)', () => {
     const TEST_VAULT = resolve(__dirname, 'fixtures', 'graph-vault');
     let sandbox: VaultFSSandbox;

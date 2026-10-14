@@ -5,7 +5,7 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { AuthTokenModal } from '../modals/AuthTokenModal';
 import { ProfileModal } from '../modals/ProfileModal';
-import type { Profile, Session } from '../../types/api';
+import type { Profile, Session, VaultStats } from '../../types/api';
 import { hasAuthToken } from '../../services/auth-storage';
 
 interface MainLayoutProps {
@@ -23,6 +23,7 @@ interface MainLayoutProps {
   onDeleteSession: (id: string) => Promise<void>;
   isDaemonOnline: boolean;
   daemonUptime: number;
+  vaultStats?: VaultStats | null;
   onTokenUpdated: () => void;
   children: React.ReactNode;
 }
@@ -42,6 +43,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   onDeleteSession,
   isDaemonOnline,
   daemonUptime,
+  vaultStats,
   onTokenUpdated,
   children
 }) => {
@@ -66,6 +68,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         onDeleteSession={onDeleteSession}
         isDaemonOnline={isDaemonOnline}
         daemonUptime={daemonUptime}
+        vaultStats={vaultStats}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
       />

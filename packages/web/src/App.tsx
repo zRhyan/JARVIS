@@ -13,7 +13,7 @@ import { ProposalCard } from './components/proposal/ProposalCard';
 import { ShieldAlert } from 'lucide-react';
 
 export default function App() {
-  const { isOnline, uptimeSeconds, checkHealth } = useDaemonHealth();
+  const { isOnline, uptimeSeconds, vaultStats, checkHealth } = useDaemonHealth();
   const { 
     profiles, 
     activeProfile, 
@@ -95,6 +95,7 @@ export default function App() {
       onDeleteSession={deleteSession}
       isDaemonOnline={isOnline}
       daemonUptime={uptimeSeconds}
+      vaultStats={vaultStats}
       onTokenUpdated={handleTokenUpdated}
     >
       {!isOnline ? (

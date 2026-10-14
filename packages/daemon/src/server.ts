@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
 import { JarvisAgent, buildSystemPrompt, type ToolCallbacks } from './agent-loop.js';
 import { initVaultContext, type VaultContext } from './vault-context.js';
+import { VaultWatcherService } from './vault-watcher.js';
 import { ToolExecutor } from './tool-executor.js';
 import { verifyBearer, isLoopbackRequest } from './auth.js';
 import type { JarvisDB } from './db.js';
@@ -59,10 +60,25 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
     const profile = profiles.getActive();
     if (!profile) throw httpError(409, 'Nenhum perfil ativo. Crie um perfil via POST /api/profiles.');
     if (!activeCtx || activeCtx.profileId !== profile.id || activeCtx.vaultPath !== profile.vaultPath) {
-      activeCtx = { profileId: profile.id, vaultPath: profile.vaultPath, ctx: await vaultLoader(profile.vaultPath) };
+      if (activeCtx?.ctx.watcher) {
+        await activeCtx.ctx.watcher.close();
+      }
+      const ctx = await vaultLoader(profile.vaultPath);
+      if (!ctx.watcher) {
+        const watcher = new VaultWatcherService(ctx);
+        watcher.start();
+        ctx.watcher = watcher;
+      }
+      activeCtx = { profileId: profile.id, vaultPath: profile.vaultPath, ctx };
     }
     return { profile, ctx: activeCtx.ctx };
   }
+
+  app.addHook('onClose', async () => {
+    if (activeCtx?.ctx.watcher) {
+      await activeCtx.ctx.watcher.close();
+    }
+  });
 
   // ---- Segurança: loopback, CORS restrito e Bearer token ----
   app.addHook('onRequest', async (req, reply) => {
@@ -131,10 +147,23 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
   // ---- Health ----
   app.get('/api/health', async () => {
     const active = profiles.getActive();
+    let vaultStats = null;
+    if (active) {
+      try {
+        const { ctx } = await getActiveContext();
+        vaultStats = ctx.watcher ? ctx.watcher.getStats() : {
+          indexedNotes: ctx.graph.getAllNodes().length,
+          lastSyncAt: null
+        };
+      } catch {
+        // Ignora caso não consiga carregar o cofre no momento
+      }
+    }
     return {
       status: 'ok',
       uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
-      activeProfile: active ? toPublic(active) : null
+      activeProfile: active ? toPublic(active) : null,
+      vault: vaultStats
     };
   });
 
@@ -159,8 +188,20 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
     const { id } = req.params as { id: string };
     const target = profiles.get(id);
     if (!target) throw httpError(404, `Perfil "${id}" não encontrado.`);
+    
+    // Encerra watcher do perfil anterior, se houver
+    if (activeCtx?.ctx.watcher) {
+      await activeCtx.ctx.watcher.close();
+    }
+
     // Reinicializa cofre e grafo; só efetiva a troca se o cofre carregar com sucesso
     const ctx = await vaultLoader(target.vaultPath);
+    if (!ctx.watcher) {
+      const watcher = new VaultWatcherService(ctx);
+      watcher.start();
+      ctx.watcher = watcher;
+    }
+
     const active = profiles.setActive(id);
     activeCtx = { profileId: active.id, vaultPath: active.vaultPath, ctx };
     return { activeProfile: toPublic(active), indexedNotes: ctx.graph.getAllNodes().length };
