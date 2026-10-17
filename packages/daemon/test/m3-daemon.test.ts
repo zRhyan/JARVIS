@@ -247,6 +247,9 @@ describe('API HTTP', () => {
     expect(full.messages.map((m: any) => m.role)).toEqual(['user', 'assistant']);
     expect(full.messages[1].content).toBe('Proposta criada.');
 
+    const proposalWithMsg = (await a.inject({ method: 'GET', url: `/api/proposals?sessionId=${sessionsList[0].id}`, headers: auth })).json().proposals;
+    expect(proposalWithMsg[0].messageId).toBe(full.messages[1].id);
+
     expect((await a.inject({ method: 'DELETE', url: `/api/sessions/${sessionsList[0].id}`, headers: auth })).statusCode).toBe(204);
     await a.close();
   });

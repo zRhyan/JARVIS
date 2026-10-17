@@ -365,8 +365,11 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       }
       if (toSave.length) {
         const inserted = sessions.appendMessages(sessionId, toSave);
-        // Vincula o message_id do assistente a todas as propostas emitidas nesta rodada
-        const assistantMsg = inserted.find((m) => m.role === 'assistant');
+        // Vincula o message_id do assistente a todas as propostas emitidas nesta rodada.
+        // Prioriza a mensagem de resposta visível com texto, ou a última gerada pelo assistente
+        const assistantMsg =
+          [...inserted].reverse().find((m) => m.role === 'assistant' && m.content && m.content.trim().length > 0) ||
+          [...inserted].reverse().find((m) => m.role === 'assistant');
         if (assistantMsg && createdProposalsInTurn.length > 0) {
           const updateStmt = opts.db.prepare('UPDATE proposals SET message_id = ? WHERE id = ?');
           for (const propId of createdProposalsInTurn) {

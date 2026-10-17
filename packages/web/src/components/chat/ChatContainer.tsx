@@ -169,42 +169,97 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           </div>
         ) : (
           <div className="max-w-4xl mx-auto space-y-4">
-            {messages
-              .filter((m) => m.role === 'user' || m.role === 'assistant')
-              .filter((m, _, arr) => m.role === 'user' || (m.content && m.content.trim().length > 0) || (m === arr[arr.length - 1] && (isStreaming || activeTools.length > 0)))
-              .map((msg, index, filteredArr) => {
-                const isLast = index === filteredArr.length - 1;
-                return (
-                  <div key={msg.id || index}>
-                    <MessageBubble
-                      message={msg}
-                      isStreaming={isStreaming && isLast && msg.role === 'assistant'}
-                      activeTools={isLast && msg.role === 'assistant' ? activeTools : []}
-                    />
+            {(() => {
+              const filteredArr = messages
+                .filter((m) => m.role === 'user' || m.role === 'assistant')
+                .filter(
+                  (m, _, arr) =>
+                    m.role === 'user' ||
+                    (m.content && m.content.trim().length > 0) ||
+                    (m === arr[arr.length - 1] && (isStreaming || activeTools.length > 0))
+                );
 
-                  {/* Renderização de propostas associadas à mensagem específica */}
-                  {renderProposalCard && msg.role === 'assistant' && (() => {
-                    // Vincula propostas pelo messageId; se for a última mensagem do assistente,
-                    // acolhe também propostas recém-chegadas via SSE que ainda não tenham messageId persistido
-                    const matchingProposals = proposals.filter((p) => {
-                      if (p.messageId) {
-                        return p.messageId === msg.id;
-                      }
-                      // Se não tem messageId vinculado (streaming em tempo real ou legado), exibe na última mensagem do assistente
-                      return isLast;
-                    });
+              const visibleMessageIds = new Set(filteredArr.map((m) => m.id));
+              const lastVisibleAssistant = [...filteredArr].reverse().find((m) => m.role === 'assistant');
 
-                    if (matchingProposals.length === 0) return null;
+              // Mapeia propostas para a mensagem visível correta
+              const proposalTargetMap = new Map<string, Proposal[]>();
+              const renderedProposalIds = new Set<string>();
+
+              proposals.forEach((p) => {
+                let targetId: string | undefined;
+
+                // 1. Caso direto: messageId corresponde a uma mensagem visível
+                if (p.messageId && visibleMessageIds.has(p.messageId)) {
+                  targetId = p.messageId;
+                } 
+                // 2. Caso legado ou intermediário: messageId aponta para tool call ou mensagem sem texto
+                else if (p.messageId) {
+                  const rawIndex = messages.findIndex((m) => m.id === p.messageId);
+                  if (rawIndex !== -1) {
+                    // Busca a mensagem de assistente visível seguinte na mesma rodada
+                    const nextVisible = messages
+                      .slice(rawIndex + 1)
+                      .find((m) => m.role === 'assistant' && visibleMessageIds.has(m.id));
+                    if (nextVisible) {
+                      targetId = nextVisible.id;
+                    }
+                  }
+                }
+
+                // 3. Fallback: vincula à última mensagem visível do assistente
+                if (!targetId && lastVisibleAssistant) {
+                  targetId = lastVisibleAssistant.id;
+                }
+
+                if (targetId) {
+                  const currentList = proposalTargetMap.get(targetId) || [];
+                  currentList.push(p);
+                  proposalTargetMap.set(targetId, currentList);
+                  renderedProposalIds.add(p.id);
+                }
+              });
+
+              // Propostas que não puderam ser vinculadas a nenhuma mensagem específica
+              const unrenderedProposals = proposals.filter((p) => !renderedProposalIds.has(p.id));
+
+              return (
+                <>
+                  {filteredArr.map((msg, index) => {
+                    const isLast = index === filteredArr.length - 1;
+                    const matchingProposals = proposalTargetMap.get(msg.id) || [];
 
                     return (
-                      <div className="ml-12 md:ml-14 my-2 space-y-3">
-                        {matchingProposals.map((proposal) => renderProposalCard(proposal))}
+                      <div key={msg.id || index}>
+                        <MessageBubble
+                          message={msg}
+                          isStreaming={isStreaming && isLast && msg.role === 'assistant'}
+                          activeTools={isLast && msg.role === 'assistant' ? activeTools : []}
+                        />
+
+                        {/* Renderização de propostas associadas à mensagem */}
+                        {renderProposalCard && msg.role === 'assistant' && matchingProposals.length > 0 && (
+                          <div className="ml-12 md:ml-14 my-2 space-y-3">
+                            {matchingProposals.map((proposal) => renderProposalCard(proposal))}
+                          </div>
+                        )}
                       </div>
                     );
-                  })()}
-                </div>
+                  })}
+
+                  {/* Fallback de Segurança: Garante que NENHUMA proposta da sessão fique invisível */}
+                  {renderProposalCard && unrenderedProposals.length > 0 && (
+                    <div className="ml-12 md:ml-14 my-4 p-3 rounded-2xl jarvis-panel border border-cyan-800/60 space-y-3">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-cyan-400">
+                        <FileEdit className="h-4 w-4" />
+                        <span>Propostas Pendentes de Revisão:</span>
+                      </div>
+                      {unrenderedProposals.map((proposal) => renderProposalCard(proposal))}
+                    </div>
+                  )}
+                </>
               );
-            })}
+            })()}
           </div>
         )}
       </div>

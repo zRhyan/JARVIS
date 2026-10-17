@@ -139,6 +139,11 @@ export const ToolCallBadge: React.FC<ToolCallBadgeProps> = ({ toolInfo }) => {
           <pre className="text-slate-300 font-mono overflow-x-auto p-1.5 rounded bg-slate-900/60 border border-slate-800/60">
             {JSON.stringify(toolInfo.args, null, 2)}
           </pre>
+          {toolInfo.tool === 'propose_block_replace' && (
+            <div className="p-1.5 rounded-lg bg-cyan-950/40 border border-cyan-800/50 text-cyan-300 font-sans text-[11px] flex items-center gap-1.5">
+              <span>💡 O card interativo de revisão do Diff com botões de <strong>Aprovar</strong> e <strong>Rejeitar</strong> encontra-se logo abaixo na mensagem.</span>
+            </div>
+          )}
           {toolInfo.error && (
             <div className="text-rose-400 pt-1">
               <strong>Erro:</strong> {toolInfo.error}

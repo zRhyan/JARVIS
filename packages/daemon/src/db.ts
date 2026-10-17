@@ -83,5 +83,31 @@ export function openDatabase(dataDir: string, inMemory = false): JarvisDB {
     db.exec("ALTER TABLE proposals ADD COLUMN message_id TEXT;");
   }
 
+  // Normalização defensiva: se uma proposta tem message_id apontando para uma mensagem sem conteúdo de texto (ex: tool call),
+  // remapeia para a mensagem de texto do assistente seguinte na mesma sessão
+  try {
+    db.exec(`
+      UPDATE proposals
+      SET message_id = (
+        SELECT m2.id
+        FROM messages m1
+        JOIN messages m2 ON m2.session_id = m1.session_id AND m2.seq > m1.seq AND m2.role = 'assistant' AND LENGTH(TRIM(m2.content)) > 0
+        WHERE m1.id = proposals.message_id AND LENGTH(TRIM(m1.content)) = 0
+        ORDER BY m2.seq ASC
+        LIMIT 1
+      )
+      WHERE message_id IN (
+        SELECT id FROM messages WHERE LENGTH(TRIM(content)) = 0
+      ) AND EXISTS (
+        SELECT 1
+        FROM messages m1
+        JOIN messages m2 ON m2.session_id = m1.session_id AND m2.seq > m1.seq AND m2.role = 'assistant' AND LENGTH(TRIM(m2.content)) > 0
+        WHERE m1.id = proposals.message_id
+      );
+    `);
+  } catch {
+    // Silencioso se o schema não suportar
+  }
+
   return db;
 }
