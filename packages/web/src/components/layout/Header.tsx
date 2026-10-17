@@ -10,10 +10,17 @@ import {
   Check, 
   Sparkles, 
   BookmarkCheck,
-  KeyRound
+  KeyRound,
+  Settings,
+  Volume2,
+  VolumeX,
+  Play
 } from 'lucide-react';
 import type { Profile } from '../../types/api';
 import { CURATED_MODELS, type CuratedModel } from '../../types/api';
+import { JarvisArcOrb } from '../hud/JarvisArcOrb';
+import { getIntroFrequency, setIntroFrequency, type IntroFrequency } from '../../services/intro-config';
+import { soundFX } from '../../services/sound-effects';
 
 interface HeaderProps {
   profiles: Profile[];
@@ -25,6 +32,8 @@ interface HeaderProps {
   onSetDefaultModel: (profileId: string, modelId: string) => Promise<void>;
   onOpenAuthTokenModal: () => void;
   hasToken: boolean;
+  onReplayIntro?: () => void;
+  isStreaming?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,14 +45,20 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectModel,
   onSetDefaultModel,
   onOpenAuthTokenModal,
-  hasToken
+  hasToken,
+  onReplayIntro,
+  isStreaming = false
 }) => {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [hudDropdownOpen, setHudDropdownOpen] = useState(false);
   const [savingDefaultModel, setSavingDefaultModel] = useState(false);
+  const [introFrequency, setIntroFrequencyState] = useState<IntroFrequency>(() => getIntroFrequency());
+  const [soundEnabled, setSoundEnabledState] = useState(() => soundFX.isSoundEnabled());
 
   const profileRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<HTMLDivElement>(null);
+  const hudRef = useRef<HTMLDivElement>(null);
 
   // Fecha dropdowns ao clicar fora
   useEffect(() => {
@@ -53,6 +68,9 @@ export const Header: React.FC<HeaderProps> = ({
       }
       if (modelRef.current && !modelRef.current.contains(e.target as Node)) {
         setModelDropdownOpen(false);
+      }
+      if (hudRef.current && !hudRef.current.contains(e.target as Node)) {
+        setHudDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -245,8 +263,98 @@ export const Header: React.FC<HeaderProps> = ({
         )}
       </div>
 
-      {/* Lado Direito: Guard de Token & Status */}
-      <div className="flex items-center gap-3">
+      {/* Lado Direito: Arc Reactor Compacto, Configurações HUD & Token */}
+      <div className="flex items-center gap-2.5">
+        {/* Arc Reactor Compacto Animado */}
+        <div
+          title={isStreaming ? 'JARVIS Processando...' : 'JARVIS Núcleo Ativo'}
+          className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900/60 border border-cyan-500/20"
+        >
+          <JarvisArcOrb
+            size={28}
+            state={isStreaming ? 'thinking' : 'idle'}
+          />
+          <span className="text-[11px] font-mono text-cyan-300 font-medium hidden lg:inline">
+            {isStreaming ? 'PROCESSANDO' : 'ONLINE'}
+          </span>
+        </div>
+
+        {/* Dropdown de Configurações HUD */}
+        <div className="relative" ref={hudRef}>
+          <button
+            onClick={() => setHudDropdownOpen((prev) => !prev)}
+            className="p-1.5 rounded-xl border border-slate-700/80 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-cyan-300 transition-colors"
+            title="Configurações da Interface HUD / JARVIS"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+
+          {hudDropdownOpen && (
+            <div className="absolute top-full right-0 mt-1.5 w-64 jarvis-panel rounded-2xl border border-slate-700/80 p-3 shadow-2xl z-30 animate-in fade-in zoom-in-95 duration-150 space-y-3">
+              <div className="text-[10px] font-semibold text-cyan-400 uppercase tracking-wider border-b border-slate-800/80 pb-1.5 flex items-center justify-between">
+                <span>Experiência Stark HUD</span>
+                <Sparkles className="h-3 w-3" />
+              </div>
+
+              {/* Frequência da Introdução */}
+              <div className="space-y-1">
+                <label className="text-[11px] text-slate-300 font-medium block">
+                  Abertura Holográfica:
+                </label>
+                <select
+                  value={introFrequency}
+                  onChange={(e) => {
+                    const val = e.target.value as IntroFrequency;
+                    setIntroFrequencyState(val);
+                    setIntroFrequency(val);
+                  }}
+                  className="w-full px-2 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-200 outline-none focus:border-cyan-500 cursor-pointer"
+                >
+                  <option value="once_per_day">1 vez ao dia (Padrão)</option>
+                  <option value="always">Sempre ao carregar</option>
+                  <option value="never">Desativada (Direto no chat)</option>
+                </select>
+              </div>
+
+              {/* Alternar Som */}
+              <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                <span className="text-[11px] text-slate-300">Efeitos Sonoros HUD</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newState = !soundEnabled;
+                    setSoundEnabledState(newState);
+                    soundFX.setSoundEnabled(newState);
+                  }}
+                  className={`p-1.5 rounded-lg border text-xs transition-colors ${
+                    soundEnabled
+                      ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300'
+                      : 'bg-slate-900 border-slate-800 text-slate-500'
+                  }`}
+                  title={soundEnabled ? 'Silenciar Áudio' : 'Ativar Áudio'}
+                >
+                  {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+
+              {/* Botão de Repetir Introdução */}
+              {onReplayIntro && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHudDropdownOpen(false);
+                    onReplayIntro();
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-cyan-950/50 hover:bg-cyan-900/50 border border-cyan-800/60 text-cyan-300 text-xs font-medium transition-colors"
+                >
+                  <Play className="h-3 w-3 fill-current" />
+                  <span>Ver Abertura do JARVIS</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         <button
           onClick={onOpenAuthTokenModal}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono transition-all ${

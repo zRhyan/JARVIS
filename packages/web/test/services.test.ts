@@ -124,3 +124,67 @@ describe('SSE Client Service', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('Sound FX Service', () => {
+  it('deve alternar status de som e persistir no storage', async () => {
+    const { soundFX } = await import('../src/services/sound-effects');
+    expect(soundFX.isSoundEnabled()).toBe(true);
+    soundFX.setSoundEnabled(false);
+    expect(soundFX.isSoundEnabled()).toBe(false);
+    soundFX.setSoundEnabled(true);
+    expect(soundFX.isSoundEnabled()).toBe(true);
+  });
+
+  it('não deve falhar ao disparar sons mesmo sem AudioContext completo no ambiente de teste', async () => {
+    const { soundFX } = await import('../src/services/sound-effects');
+    expect(() => {
+      soundFX.playReactorHum();
+      soundFX.playDiagnosticChirp();
+      soundFX.playTeletypeClick();
+      soundFX.playTransitionWhoosh();
+    }).not.toThrow();
+  });
+});
+
+describe('Intro Config Service', () => {
+  it('deve respeitar as configurações de frequência de introdução', async () => {
+    const store: Record<string, string> = {};
+    const mockStorage = {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, value: string) => {
+        store[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete store[key];
+      },
+      clear: () => {
+        for (const k in store) delete store[k];
+      },
+      key: () => null,
+      length: 0
+    };
+    vi.stubGlobal('localStorage', mockStorage);
+    vi.stubGlobal('window', { localStorage: mockStorage });
+
+    const { getIntroFrequency, setIntroFrequency, shouldShowIntro, markIntroShownToday } = await import('../src/services/intro-config');
+
+    // Padrão
+    expect(getIntroFrequency()).toBe('once_per_day');
+
+    // Configuração never
+    setIntroFrequency('never');
+    expect(shouldShowIntro()).toBe(false);
+
+    // Configuração always
+    setIntroFrequency('always');
+    expect(shouldShowIntro()).toBe(true);
+
+    // Configuração once_per_day
+    setIntroFrequency('once_per_day');
+    markIntroShownToday();
+    // Como foi marcado hoje, não deve exibir novamente hoje
+    expect(shouldShowIntro()).toBe(false);
+
+    vi.unstubAllGlobals();
+  });
+});

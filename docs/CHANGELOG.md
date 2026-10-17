@@ -2,6 +2,27 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [Experiência Visual Imersiva Tony Stark HUD & Arc Reactor Orb] - 2026-10-17
+### Status: Concluído
+**Identidade Visual Futurista Inspirada no J.A.R.V.I.S., Abertura Holográfica, Efeitos Sonoros Sci-Fi e Núcleo Reativo**
+- **Sintetizador Nativo de Efeitos Sonoros (`sound-effects.ts`):**
+  - Implementado motor de áudio holográfico usando 100% a Web Audio API nativa (`AudioContext`), com osciladores puros sem carregar arquivos MP3 ou depender de internet.
+  - Efeitos de energização do Arc Reactor (`playReactorHum`), beeps de diagnóstico (`playDiagnosticChirp`), cliques orgânicos de teletipo (`playTeletypeClick`) e transição espacial (`playTransitionWhoosh`). Controle de mute persistido no `localStorage`.
+- **Núcleo Holográfico do Arc Reactor (`JarvisArcOrb.tsx`):**
+  - Construído em SVG vetorial de alta definição com filtros neon ciano/dourado e aceleração por hardware a 60 FPS.
+  - Implementa anéis geométricos em contra-rotação (`animate-hud-spin` e `animate-hud-spin-reverse`), triângulo clássico do reator e barras de frequência sonora centralizadas sincronizadas com a fala/digitação.
+  - Reativo aos estados da IA: `intro`, `speaking`, `thinking` (rotação acelerada em tons âmbar) e `idle`.
+- **Tela Cheia de Boas-Vindas (`JarvisIntroScreen.tsx`):**
+  - Identificação automática do turno temporal (*"Bom dia"*, *"Boa tarde"*, *"Boa noite"*).
+  - Telemetria em tempo real com contador de notas indexadas no cofre do Obsidian, nome do perfil e modelo ativo.
+  - Teletipo holográfico suave com cursor pulsante e atalho universal (`Enter`, `Espaço`, `Esc` ou clique) para transição rápida.
+- **Configurações HUD & Arc Reactor Compacto no Header (`Header.tsx` & `intro-config.ts`):**
+  - Adicionado mini Arc Reactor no cabeçalho indicando o estado em tempo real da IA (`ONLINE` vs `PROCESSANDO`).
+  - Menu de configurações HUD com opções de frequência de abertura (`1 vez ao dia`, `Sempre ao carregar` ou `Desativada`), botão de mute de som e botão para rever a animação de introdução a qualquer momento.
+- **Qualidade do Monorepo:** 70 testes automatizados 100% aprovados e bundle web compilado para produção.
+
+---
+
 ## [One-Click Launch, Auto-Open de Navegador e Autenticação Transparente] - 2026-10-17
 ### Status: Concluído
 **Experiência Plug-and-Play para Usuários Finais (Windows & Linux) e Eliminação da Fricção de Token Manual**

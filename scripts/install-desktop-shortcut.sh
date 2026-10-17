@@ -6,7 +6,8 @@
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ICON_SRC="$DIR/docs/jarvis-icon.svg"
+PROJECT_ROOT="$(cd "$DIR/.." && pwd)"
+ICON_SRC="$PROJECT_ROOT/docs/jarvis-icon.svg"
 DESKTOP_DIR="$HOME/.local/share/applications"
 ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
 
@@ -25,7 +26,7 @@ Version=1.0
 Type=Application
 Name=JARVIS Copilot
 Comment=Obsidian AI Copilot Local & Autônomo
-Exec="$DIR/jarvis.sh"
+Exec="$PROJECT_ROOT/jarvis.sh"
 Icon=jarvis
 Terminal=true
 Categories=Utility;Development;Office;

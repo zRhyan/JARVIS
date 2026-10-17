@@ -25,6 +25,8 @@ interface MainLayoutProps {
   daemonUptime: number;
   vaultStats?: VaultStats | null;
   onTokenUpdated: () => void;
+  onReplayIntro?: () => void;
+  isStreaming?: boolean;
   children: React.ReactNode;
 }
 
@@ -45,6 +47,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   daemonUptime,
   vaultStats,
   onTokenUpdated,
+  onReplayIntro,
+  isStreaming = false,
   children
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -85,6 +89,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           onSetDefaultModel={onSetDefaultModel}
           onOpenAuthTokenModal={() => setAuthTokenModalOpen(true)}
           hasToken={hasTokenState}
+          onReplayIntro={onReplayIntro}
+          isStreaming={isStreaming}
         />
 
         <main className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
