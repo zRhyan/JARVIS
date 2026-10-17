@@ -42,6 +42,39 @@ describe('Auth Storage Service', () => {
     expect(hasAuthToken()).toBe(false);
     expect(getAuthToken()).toBe('');
   });
+
+  it('deve capturar token injetado via window.__JARVIS_BOOTSTRAP_TOKEN__', () => {
+    (window as any).__JARVIS_BOOTSTRAP_TOKEN__ = 'bootstrap-token-999';
+    expect(getAuthToken()).toBe('bootstrap-token-999');
+    expect(mockStore['jarvis_auth_token']).toBe('bootstrap-token-999');
+  });
+
+  it('deve capturar token fornecido via query param ?token= e limpar da URL', () => {
+    const replaceStateMock = vi.fn();
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (k: string) => mockStore[k] ?? null,
+        setItem: (k: string, v: string) => {
+          mockStore[k] = v;
+        },
+        removeItem: (k: string) => {
+          delete mockStore[k];
+        }
+      },
+      location: {
+        search: '?token=query-token-777&other=1',
+        pathname: '/',
+        hash: ''
+      },
+      history: {
+        replaceState: replaceStateMock
+      }
+    });
+
+    expect(getAuthToken()).toBe('query-token-777');
+    expect(mockStore['jarvis_auth_token']).toBe('query-token-777');
+    expect(replaceStateMock).toHaveBeenCalledWith({}, '', '/?other=1');
+  });
 });
 
 describe('SSE Client Service', () => {

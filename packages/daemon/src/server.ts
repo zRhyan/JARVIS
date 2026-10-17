@@ -1,7 +1,7 @@
 // packages/daemon/src/server.ts
 
 import Fastify, { type FastifyInstance } from 'fastify';
-import { existsSync, createReadStream, statSync } from 'node:fs';
+import { existsSync, createReadStream, statSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
@@ -135,7 +135,12 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       if (existsSync(indexPath)) {
         reply.header('Content-Type', 'text/html; charset=utf-8');
         reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-        return reply.send(createReadStream(indexPath));
+        const html = readFileSync(indexPath, 'utf-8');
+        const injectedScript = `<script>window.__JARVIS_BOOTSTRAP_TOKEN__ = ${JSON.stringify(opts.token)};</script>`;
+        const modifiedHtml = html.includes('</head>')
+          ? html.replace('</head>', `${injectedScript}</head>`)
+          : `${injectedScript}${html}`;
+        return reply.send(modifiedHtml);
       }
       return reply.code(404).send({ error: 'Arquivo não encontrado.' });
     });

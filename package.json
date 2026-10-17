@@ -8,6 +8,7 @@
     "test": "npm run test --workspaces",
     "build": "npm run build --workspaces",
     "build:web": "npm run build --workspace=@jarvis/web",
+    "start": "npm run dev:daemon",
     "dev:daemon": "npm run dev --workspace=@jarvis/daemon",
     "dev:web": "npm run dev --workspace=@jarvis/web"
   },

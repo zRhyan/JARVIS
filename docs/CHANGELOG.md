@@ -2,6 +2,25 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [One-Click Launch, Auto-Open de Navegador e Autenticação Transparente] - 2026-10-17
+### Status: Concluído
+**Experiência Plug-and-Play para Usuários Finais (Windows & Linux) e Eliminação da Fricção de Token Manual**
+- **Autenticação Automática e Transparente de Token:**
+  - **Reutilização Persistente (`auth.ts`):** Criada a função `getOrGenerateToken(dataDir)`. O daemon agora preserva o token de segurança em `auth.token` (com permissões `0600`) entre reinicializações, eliminando a invalidação repetida da sessão do usuário.
+  - **Auto-Bootstrap na SPA Web (`server.ts` & `auth-storage.ts`):** Ao servir o arquivo `index.html` da Web UI local, o daemon injeta com segurança a tag de script `window.__JARVIS_BOOTSTRAP_TOKEN__`. Além disso, a aplicação web aceita o token via URL (`?token=...`) e limpa a URL em seguida, persistindo no `localStorage`. Usuários nunca mais precisam abrir arquivos no terminal nem copiar/colar tokens manualmente.
+- **Abertura Automática do Navegador Padrão (`main.ts`):**
+  - Implementada a função `openBrowser(url)` multiplataforma (`start` no Windows, `xdg-open` no Linux, `open` no macOS). Ao iniciar o daemon Fastify, o navegador padrão do usuário abre diretamente no JARVIS (`http://127.0.0.1:4173/?token=...`) de forma instantânea.
+- **Launchers e Instaladores de Um Clique:**
+  - **Windows (`jarvis.bat`):** Script executável que com um duplo clique no Windows Explorer verifica o Node.js, compila a interface e executa o JARVIS automaticamente.
+  - **Linux / macOS (`jarvis.sh`):** Script executável `./jarvis.sh` com fluxo inteligente de inicialização e compilação automática na primeira execução.
+  - **Atalho no Menu de Programas do Linux (`scripts/install-desktop-shortcut.sh`):** Instala o atalho `jarvis.desktop` e o ícone vetorial oficial em `~/.local/share/applications`, permitindo abrir o JARVIS pelo menu de aplicativos do Ubuntu/Debian/Fedora.
+  - **Ícone Oficial Vetorial (`docs/jarvis-icon.svg`):** Criado design HUD moderno em SVG com reator Arc Reactor neon.
+- **Documentação e Onboarding (`README.md`):**
+  - Adicionado guia direto de início rápido com instruções de 1 clique para Windows e Linux, facilitando a distribuição pública no GitHub.
+- **Qualidade do Monorepo:** 67 testes aprovados e cobertura total das novas funções de autenticação e bootstrap.
+
+---
+
 ## [Resolução Inteligente de Caminhos de Notas e Eliminação de Alucinações de Pastas] - 2026-10-16
 ### Status: Concluído
 **Resolução Automática de Notas por Nome Base, Remoção de Pastas Fictícias do Prompt e Proteção contra Sementes em Cofres Reais**

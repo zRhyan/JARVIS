@@ -3,18 +3,34 @@
 import * as dotenv from 'dotenv';
 import { resolve } from 'node:path';
 import { join } from 'node:path';
+import { exec } from 'node:child_process';
 import { resolveDataDir } from './paths.js';
 import { openDatabase } from './db.js';
-import { generateAndSaveToken } from './auth.js';
+import { getOrGenerateToken } from './auth.js';
 import { ProfileRepository } from './profile-repo.js';
 import { buildServer } from './server.js';
 
 dotenv.config();
 
+function openBrowser(url: string) {
+  try {
+    const platform = process.platform;
+    if (platform === 'win32') {
+      exec(`start "" "${url}"`);
+    } else if (platform === 'darwin') {
+      exec(`open "${url}"`);
+    } else {
+      exec(`xdg-open "${url}"`);
+    }
+  } catch {
+    // Falha silenciosa caso o ambiente não possua display/GUI
+  }
+}
+
 async function main() {
   const dataDir = resolveDataDir();
   const db = openDatabase(dataDir);
-  const token = generateAndSaveToken(dataDir);
+  const token = getOrGenerateToken(dataDir);
 
   // Bootstrap: primeira execução usando as variáveis do .env existentes
   const profiles = new ProfileRepository(db);
@@ -36,6 +52,13 @@ async function main() {
   console.log(`[JARVIS] Daemon ativo em http://127.0.0.1:${port}`);
   console.log(`[JARVIS] Dados: ${dataDir}`);
   console.log(`[JARVIS] Token de autenticação: ${join(dataDir, 'auth.token')}`);
+
+  // Abertura automática do navegador padrão se configurado (padrão: ativado)
+  const autoOpen = process.env.JARVIS_AUTO_OPEN !== 'false';
+  if (autoOpen) {
+    const launchUrl = `http://127.0.0.1:${port}/?token=${encodeURIComponent(token)}`;
+    openBrowser(launchUrl);
+  }
 
   const shutdown = async () => {
     await app.close();

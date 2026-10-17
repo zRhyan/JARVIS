@@ -17,14 +17,49 @@ function getStorage(): Storage | null {
 }
 
 export function getAuthToken(): string {
-  // 1. Tenta recuperar do localStorage (se disponível no ambiente)
   const storage = getStorage();
+
+  // 1. Injeção direta pelo Daemon via window.__JARVIS_BOOTSTRAP_TOKEN__
+  if (typeof window !== 'undefined') {
+    const bootstrapToken = (window as any).__JARVIS_BOOTSTRAP_TOKEN__;
+    if (typeof bootstrapToken === 'string' && bootstrapToken.trim()) {
+      const cleanToken = bootstrapToken.trim();
+      if (storage) {
+        storage.setItem(TOKEN_KEY, cleanToken);
+      }
+      return cleanToken;
+    }
+  }
+
+  // 2. Passagem opcional via Query Param (?token=...)
+  if (typeof window !== 'undefined' && window.location?.search) {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlToken = params.get('token');
+      if (urlToken && urlToken.trim()) {
+        const cleanToken = urlToken.trim();
+        if (storage) {
+          storage.setItem(TOKEN_KEY, cleanToken);
+        }
+        // Remove o token da URL para não poluir a barra de navegação
+        params.delete('token');
+        const newSearch = params.toString();
+        const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
+        window.history.replaceState({}, '', newUrl);
+        return cleanToken;
+      }
+    } catch {
+      // Ignora erro de parsing em ambientes sem URLSearchParams
+    }
+  }
+
+  // 3. Tenta recuperar do localStorage (se disponível no ambiente)
   if (storage) {
     const saved = storage.getItem(TOKEN_KEY);
     if (saved && saved.trim()) return saved.trim();
   }
 
-  // 2. Fallback de desenvolvimento configurado via .env (VITE_JARVIS_TOKEN)
+  // 4. Fallback de desenvolvimento configurado via .env (VITE_JARVIS_TOKEN)
   try {
     const envToken = import.meta.env?.VITE_JARVIS_TOKEN;
     if (typeof envToken === 'string' && envToken.trim()) {

@@ -7,7 +7,7 @@ import { openDatabase, type JarvisDB } from '../src/db.js';
 import { ProfileRepository, maskApiKey } from '../src/profile-repo.js';
 import { SessionRepository } from '../src/session-repo.js';
 import { ProposalStateManager } from '../src/proposal-manager.js';
-import { generateAndSaveToken, verifyBearer } from '../src/auth.js';
+import { generateAndSaveToken, getOrGenerateToken, verifyBearer } from '../src/auth.js';
 import { resolveDataDir } from '../src/paths.js';
 import { initVaultContext } from '../src/vault-context.js';
 import { buildServer, type AgentFactory } from '../src/server.js';
@@ -166,6 +166,12 @@ describe('Auth', () => {
     expect(verifyBearer(`Bearer ${t}`, t)).toBe(true);
     expect(verifyBearer('Bearer errado', t)).toBe(false);
     expect(verifyBearer(undefined, t)).toBe(false);
+  });
+
+  it('reutiliza token existente com getOrGenerateToken', () => {
+    const t1 = getOrGenerateToken(tmp);
+    const t2 = getOrGenerateToken(tmp);
+    expect(t1).toBe(t2);
   });
 });
 
