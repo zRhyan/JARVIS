@@ -26,6 +26,10 @@ export interface PatchResult {
  * Lança PatchNotFoundError ou PatchAmbiguousError caso ocorra erro.
  */
 export function applyPatch(originalContent: string, searchBlock: string, replaceBlock: string): string {
+  if (!originalContent || originalContent.trim() === '') {
+    return replaceBlock;
+  }
+
   if (searchBlock === '$END' || searchBlock === 'end') {
     const separator = originalContent.endsWith('\n') ? '' : '\n';
     return originalContent + separator + replaceBlock;

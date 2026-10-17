@@ -10,6 +10,7 @@ export type ProposalStatus = 'PENDING' | 'APPLIED' | 'REJECTED' | 'STALE';
 export interface Proposal {
   id: string;
   sessionId: string;
+  messageId: string | null;
   notePath: string;
   baseHash: string;
   searchBlock: string;
@@ -22,6 +23,7 @@ export interface Proposal {
 
 export interface NewProposal {
   sessionId: string;
+  messageId?: string | null;
   notePath: string;
   baseHash: string;
   searchBlock: string;
@@ -39,6 +41,7 @@ export class ProposalStateError extends Error {
 const toProposal = (r: any): Proposal => ({
   id: r.id,
   sessionId: r.session_id,
+  messageId: r.message_id ?? null,
   notePath: r.note_path,
   baseHash: r.base_hash,
   searchBlock: r.search_block,
@@ -52,6 +55,7 @@ const toProposal = (r: any): Proposal => ({
 /**
  * Máquina de estados: PENDING -> APPLIED | REJECTED | STALE.
  * A aprovação só grava em disco se o hash atual da nota == base_hash.
+ * Suporta rebase automático de propostas pendentes subsequentes na mesma nota.
  */
 export class ProposalStateManager {
   private patchEngine = new PatchEngine();
@@ -62,10 +66,19 @@ export class ProposalStateManager {
     const id = randomUUID();
     this.db
       .prepare(
-        `INSERT INTO proposals (id, session_id, note_path, base_hash, search_block, replace_block, unified_diff)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO proposals (id, session_id, message_id, note_path, base_hash, search_block, replace_block, unified_diff)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(id, input.sessionId, input.notePath, input.baseHash, input.searchBlock, input.replaceBlock, input.unifiedDiff);
+      .run(
+        id,
+        input.sessionId,
+        input.messageId ?? null,
+        input.notePath,
+        input.baseHash,
+        input.searchBlock,
+        input.replaceBlock,
+        input.unifiedDiff
+      );
     return this.get(id)!;
   }
 
@@ -96,7 +109,8 @@ export class ProposalStateManager {
   }
 
   /**
-   * Aprova: valida integridade (hash), grava atomicamente e atualiza o grafo.
+   * Aprova: valida integridade (hash), grava atomicamente, atualiza o grafo
+   * e realiza o rebase automático de outras propostas PENDING para a mesma nota.
    * Retorna a proposta resultante (APPLIED ou STALE).
    */
   async approve(id: string, ctx: VaultContext): Promise<Proposal> {
@@ -120,7 +134,48 @@ export class ProposalStateManager {
 
     const written = await ctx.sandbox.writeAtomic(p.notePath, result.patchedContent);
     ctx.graph.addNote(written.relativePath, written.content);
-    return this.setStatus(p.id, 'APPLIED');
+    const applied = this.setStatus(p.id, 'APPLIED');
+
+    // Rebase automático de outras propostas PENDING desta mesma nota
+    await this.rebasePendingProposalsForNote(p.notePath, written.content, written.contentHash, ctx);
+
+    return applied;
+  }
+
+  /**
+   * Rebase defensivo: para todas as propostas PENDING da nota alterada, verifica
+   * se o search_block ainda é válido e único no novo conteúdo. Em caso afirmativo,
+   * atualiza o base_hash e recalcula o unified_diff. Caso contrário, marca como STALE.
+   */
+  private async rebasePendingProposalsForNote(
+    notePath: string,
+    newContent: string,
+    newHash: string,
+    _ctx: VaultContext
+  ): Promise<void> {
+    const pendingSameNote = this.db
+      .prepare('SELECT * FROM proposals WHERE note_path = ? AND status = ?')
+      .all(notePath, 'PENDING')
+      .map(toProposal);
+
+    for (const other of pendingSameNote) {
+      const testPatch = this.patchEngine.applySearchAndReplace(
+        newContent,
+        other.searchBlock,
+        other.replaceBlock,
+        other.notePath
+      );
+
+      if (testPatch.isSuccess && testPatch.unifiedDiff) {
+        // O patch ainda se aplica com sucesso e sem ambiguidades no novo arquivo!
+        this.db
+          .prepare('UPDATE proposals SET base_hash = ?, unified_diff = ? WHERE id = ?')
+          .run(newHash, testPatch.unifiedDiff, other.id);
+      } else {
+        // Houve conflito ou o search_block foi apagado/modificado pela edição anterior
+        this.setStatus(other.id, 'STALE');
+      }
+    }
   }
 
   private requirePending(id: string): Proposal {

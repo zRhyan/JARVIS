@@ -83,18 +83,21 @@ export class SessionRepository {
     return this.db.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY seq').all(sessionId).map(toMessage);
   }
 
-  appendMessages(sessionId: string, msgs: NewMessage[]): void {
+  appendMessages(sessionId: string, msgs: NewMessage[]): MessageRow[] {
     const nextSeq = (this.db.prepare('SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM messages WHERE session_id = ?').get(sessionId) as any).n as number;
     const ins = this.db.prepare(
       `INSERT INTO messages (id, session_id, seq, role, content, tool_calls, tool_call_id, token_usage_prompt, token_usage_completion)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
+    const created: MessageRow[] = [];
     const tx = this.db.transaction(() => {
       msgs.forEach((m, i) => {
+        const id = randomUUID();
+        const seq = nextSeq + i;
         ins.run(
-          randomUUID(),
+          id,
           sessionId,
-          nextSeq + i,
+          seq,
           m.role,
           m.content ?? '',
           m.toolCalls && m.toolCalls.length ? JSON.stringify(m.toolCalls) : null,
@@ -102,9 +105,20 @@ export class SessionRepository {
           m.tokenUsagePrompt ?? 0,
           m.tokenUsageCompletion ?? 0
         );
+        created.push({
+          id,
+          sessionId,
+          seq,
+          role: m.role,
+          content: m.content ?? '',
+          toolCalls: m.toolCalls ?? null,
+          toolCallId: m.toolCallId ?? null,
+          createdAt: new Date().toISOString()
+        });
       });
       this.db.prepare('UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(sessionId);
     });
     tx();
+    return created;
   }
 }

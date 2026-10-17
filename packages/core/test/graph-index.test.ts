@@ -140,6 +140,29 @@ Texto livre citando um link genérico para [[Albert Einstein]] em outro contexto
     expect(graph.removeNote('nao-existe.md')).toBe(false);
   });
 
+  it('Deve localizar notas no getNote e resolveNotePath mesmo sem extensão ou por basename em subpastas', () => {
+    graph.addNote('1 - Fields/Field - Operational Systems OS.md', '## Map of Content\n- **Broader Fields**: [[Computing]]');
+
+    // 1. Caminho completo exato
+    expect(graph.getNote('1 - Fields/Field - Operational Systems OS.md')).toBeDefined();
+    expect(graph.resolveNotePath('1 - Fields/Field - Operational Systems OS.md')).toBe('1 - Fields/Field - Operational Systems OS.md');
+
+    // 2. Caminho sem .md
+    expect(graph.getNote('1 - Fields/Field - Operational Systems OS')).toBeDefined();
+    expect(graph.resolveNotePath('1 - Fields/Field - Operational Systems OS')).toBe('1 - Fields/Field - Operational Systems OS.md');
+
+    // 3. Apenas nome base (basename) sem pasta
+    expect(graph.getNote('Field - Operational Systems OS')).toBeDefined();
+    expect(graph.resolveNotePath('Field - Operational Systems OS')).toBe('1 - Fields/Field - Operational Systems OS.md');
+
+    // 4. Nome base com .md sem pasta
+    expect(graph.getNote('Field - Operational Systems OS.md')).toBeDefined();
+
+    // 5. Caminho com pasta incorreta/adivinhada mas nome base correto
+    expect(graph.getNote('Areas/Field - Operational Systems OS.md')).toBeDefined();
+    expect(graph.resolveNotePath('Areas/Field - Operational Systems OS.md')).toBe('1 - Fields/Field - Operational Systems OS.md');
+  });
+
   describe('Integração com VaultFSSandbox (buildIndex)', () => {
     const TEST_VAULT = resolve(__dirname, 'fixtures', 'graph-vault');
     let sandbox: VaultFSSandbox;

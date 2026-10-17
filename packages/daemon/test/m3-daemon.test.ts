@@ -124,6 +124,38 @@ describe('ProposalStateManager', () => {
     const { mgr, prop } = await setup();
     expect(mgr.reject(prop.id).status).toBe('REJECTED');
   });
+
+  it('realiza rebase automático de propostas pendentes subsequentes para a mesma nota', async () => {
+    const { mgr, prop, ctx } = await setup();
+    // Cria uma segunda proposta pendente para a mesma nota (adicionando ao final do arquivo)
+    const currentNote = await ctx.sandbox.readNote('nota.md');
+    const prop2 = mgr.create({
+      sessionId: prop.sessionId,
+      notePath: 'nota.md',
+      baseHash: currentNote.contentHash, // mesmo baseHash inicial
+      searchBlock: '$END',
+      replaceBlock: '## Segunda seção adicionada.',
+      unifiedDiff: '+## Segunda seção adicionada.'
+    });
+
+    // Aprova a primeira proposta
+    const res1 = await mgr.approve(prop.id, ctx);
+    expect(res1.status).toBe('APPLIED');
+
+    // Verifica que a prop2 foi rebaseada e NÃO virou STALE prematuramente
+    const updatedProp2 = mgr.get(prop2.id);
+    expect(updatedProp2?.status).toBe('PENDING');
+    expect(updatedProp2?.baseHash).not.toBe(currentNote.contentHash); // baseHash atualizado
+
+    // Agora aprova a segunda proposta com sucesso
+    const res2 = await mgr.approve(prop2.id, ctx);
+    expect(res2.status).toBe('APPLIED');
+
+    // Confirma que ambas as edições foram consolidadas no arquivo final
+    const finalContent = readFileSync(join(vault, 'nota.md'), 'utf-8');
+    expect(finalContent).toContain('Texto alterado.');
+    expect(finalContent).toContain('## Segunda seção adicionada.');
+  });
 });
 
 describe('Auth', () => {

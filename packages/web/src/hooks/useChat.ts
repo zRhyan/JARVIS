@@ -200,7 +200,15 @@ export function useChat({ sessionId, onSessionCreated, onSessionUpdated }: UseCh
               }
             },
             onError: (err) => {
-              setError(err.message || 'Erro durante a geração');
+              const errMsg = err.message || 'Erro durante a geração';
+              setError(errMsg);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId && !m.content
+                    ? { ...m, content: `⚠️ **Ocorreu um erro ao processar sua solicitação:** ${errMsg}` }
+                    : m
+                )
+              );
               setIsStreaming(false);
               currentStreamingSessionIdRef.current = null;
             }
@@ -208,7 +216,15 @@ export function useChat({ sessionId, onSessionCreated, onSessionUpdated }: UseCh
         );
       } catch (err: any) {
         if (err.name !== 'AbortError') {
-          setError(err.message || 'Erro ao enviar mensagem');
+          const errMsg = err.message || 'Erro ao enviar mensagem';
+          setError(errMsg);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId && !m.content
+                ? { ...m, content: `⚠️ **Ocorreu um erro ao enviar mensagem:** ${errMsg}` }
+                : m
+            )
+          );
         }
       } finally {
         setIsStreaming(false);

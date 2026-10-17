@@ -2,6 +2,61 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [Resolução Inteligente de Caminhos de Notas e Eliminação de Alucinações de Pastas] - 2026-10-16
+### Status: Concluído
+**Resolução Automática de Notas por Nome Base, Remoção de Pastas Fictícias do Prompt e Proteção contra Sementes em Cofres Reais**
+- **Camada Core (`@jarvis/core`):**
+  - **Busca Resiliente em `GraphIndex` (`graph-index.ts`):** `getNote(path)` e o novo método `resolveNotePath(nameOrPath)` agora encontram a nota mesmo que o caminho informado omita a extensão `.md`, ou forneça apenas o nome base da nota sem pasta (ex: `"Field - Operational Systems OS"` localiza `"1 - Fields/Field - Operational Systems OS.md"`). Suporta também buscas onde o modelo indicou uma subpasta incorreta ou adivinhada.
+- **Camada Daemon (`@jarvis/daemon`):**
+  - **Resolução Automática de Caminhos em `ToolExecutor` (`tool-executor.ts`):** Implementado `resolveNotePath(inputPath)` que intercepta as chamadas de `read_note`, `get_graph_neighborhood` e `propose_block_replace`. Se o caminho direto não for encontrado, o executor resolve a nota real no cofre por correspondência de nome base via Grafo e Sandbox, eliminando erros de `ENOENT`.
+  - **Proteção contra Sementes em Cofres Existentes (`vault-context.ts`):** Corrigida a lógica de `seedDefaultVault` em `initVaultContext`. O daemon agora verifica se o diretório do cofre possui arquivos reais antes de criar notas de demonstração (`areas/`, `conceitos/`, `VAULT.md`), evitando poluir cofres preexistentes do usuário.
+  - **Purificação do Catálogo de Ferramentas (`tool-registry.ts`):** Removidos exemplos artificiais com pastas inexistentes (`"areas/fisica.md"`, `"conceitos/forca.md"`), substituindo-os por diretrizes claras que explicam ao LLM que ele pode fornecer apenas o nome da nota ou o caminho relativo real.
+  - **Instruções de Resolução no System Prompt (`agent-loop.ts`):** Adicionada seção explícita `[RESOLUÇÃO DE NOTAS E PASTAS]` instruindo o JARVIS a nunca adivinhar ou inventar pastas fictícias, orientando o uso do nome limpo da nota ou de `search_notes`.
+- **Camada Web (`@jarvis/web`):**
+  - **Modelos Modernos para o Dia a Dia e Suporte a Raciocínio (`api.ts`):** O catálogo pré-configurado foi expandido tendo como principal destaque o novo **Gemini 3.8 Flash** (`google/gemini-3.8-flash`) com suporte a Thinking/Raciocínio nativo, além de opções como Claude 3.5 Haiku, Claude 3.5 Sonnet, GPT-4o Mini, GPT-4o, DeepSeek V3 e Qwen 2.5 72B.
+  - **Suporte a Modelos Personalizados do OpenRouter (`Header.tsx` & `ProfileModal.tsx`):** Adicionado campo dedicado para inserção livre de qualquer ID de modelo do OpenRouter no menu superior de troca rápida e na criação/edição de perfil, permitindo usar qualquer modelo sem necessidade de alterar o código.
+- **Camada Daemon (`@jarvis/daemon`):**
+  - **Suporte Nativo a Reasoning/Thinking Effort (`agent-loop.ts` & `server.ts`):** Implementada a injeção do parâmetro nativo de esforço de raciocínio da API do OpenRouter (`reasoning: { effort: 'low' | 'medium' | 'high' }`). O daemon agora aceita e encaminha `reasoningEffort` ou `thinking_level` tanto por perfil quanto nas requisições diretas de chat, garantindo pleno controle sobre modelos com pensamento (como o Gemini 3.8 Flash) sem erro de duplicação de parâmetros.
+  - **Modelo Padrão Atualizado:** Definido `google/gemini-3.8-flash` como modelo padrão do agente JARVIS no daemon.
+- **Qualidade do Monorepo:** 64 testes 100% aprovados (22 no core, 37 no daemon, 5 no web) e build de produção homologado.
+
+---
+
+## [Melhorias de UX/UI no Feed de Chat e Destaque de Notas Obsidian] - 2026-10-15
+### Status: Concluído
+**Ocultação de Mensagens Brutas de Ferramentas, Identidade Visual Roxa do Obsidian e Renderização Inteligente de Código**
+- **Camada Web (`@jarvis/web`):**
+  - **Filtragem de Mensagens Internas:** O `ChatContainer.tsx` agora filtra e omite mensagens do tipo `role: 'tool'` (JSONs de saída bruta de ferramentas), mantendo os badges interativos (`ToolCallBadge`) no topo da resposta do assistente e eliminando poluição visual no feed.
+  - **Identidade Visual Roxa do Obsidian (`WikilinkText.tsx`):**
+    - `[[wikilinks]]` e referências a caminhos `.md` agora são renderizados com a paleta roxa oficial do Obsidian (`#7C3AED` / fundo suave, borda violeta e texto `#c4b5fd` com ícone de nota ou link).
+    - Aplicação recursiva no `MessageBubble.tsx` para garantir que tópicos em bullet points (`li`), parágrafos e elementos formatados recebam o destaque visual correto.
+  - **Renderização Inteligente de Código (`MessageBubble.tsx`):**
+    - Expressões inline ou códigos curtos de uma linha deixaram de gerar caixas escuras gigantes com botão de cópia.
+    - O container com botão "Copiar" e ícone de terminal foi reservado exclusivamente para blocos de código multilinhas ou com especificador de linguagem explícito.
+  - Validação de build em produção (`tsc && vite build`).
+- **Camada Daemon (`@jarvis/daemon`):**
+  - **Diretriz de Formatação no `buildSystemPrompt` (`agent-loop.ts`):** Instrução para o agente estruturar listas de notas do cofre sempre em bullet points hierárquicos com sintaxe `[[Nome da Nota]]`, com recuo para MoCs ou resumos descritivos e sem despejar fragmentos crus de tabelas.
+  - **Correção de Queda de Respostas do Assistente (`agent-loop.ts`):** Corrigido bug crítico onde chamadas do modelo sem invocação de ferramentas (ex: respostas diretas ou pedidos de esclarecimento como *"pesquise em inglês agora"*) descartavam o conteúdo obtido no primeiro ciclo e realizavam uma chamada duplicada redundante via streaming, que com frequência retornava deltas vazios no OpenRouter e persistia mensagens em branco no banco de dados. Agora o conteúdo pré-computado é transmitido diretamente em chunks via SSE com fallback seguro.
+  - **Mecanismo de Busca Híbrido Conteúdo + Nome do Arquivo (`tool-executor.ts`):** Aprimorada a ferramenta `search_notes` para casar a query tanto contra as linhas internas de conteúdo da nota quanto contra o próprio caminho e nome do arquivo Markdown. Notas que funcionam como Map of Content ou taxonomia e cujo título define o assunto (ex: `1 - Fields/Symbolic Logic.md`) agora são localizadas e indexadas nos resultados de busca com snippet de identificação imediato.
+  - **Rebase Automático de Propostas Pendentes (`proposal-manager.ts`):** Implementado mecanismo de rebase atômico na aprovação de propostas. Quando uma proposta é aplicada com sucesso em uma nota que possui outras propostas pendentes (`PENDING`), o sistema valida se as modificações subsequentes continuam válidas e sem conflito sobre o novo conteúdo da nota, recalculando o `base_hash` e o `unified_diff` automaticamente. Isso permite aprovar sequencialmente múltiplas propostas na mesma nota sem erro prematuro de `STALE`.
+  - **Vinculação de Propostas a Mensagens do Assistente (`server.ts` & `db.ts`):** Adicionada a coluna `message_id` à tabela `proposals` com migração defensiva automática em SQLite. O daemon agora vincula cada proposta à mensagem de resposta que a gerou.
+  - **Padronização Limpa de Wikilinks (`agent-loop.ts`):** Estabelecida diretriz estrita no prompt de sistema para que o JARVIS nunca inclua o caminho de diretórios ou a extensão `.md` ao criar referências em notas ou no chat. Wikilinks agora são formatados exclusivamente com o nome limpo da nota (ex: `[[Nome da Nota]]` em vez de `[[6 - Main Notes/Nome da Nota]]`), respeitando o comportamento nativo do Obsidian e mantendo o texto legível e sem poluição.
+  - **Resiliência do Ciclo ReAct e Síntese Graciosa de Pesquisas (`agent-loop.ts` & `server.ts`):**
+    - Elevação do limite de iterações do ReAct de 10 para 25, permitindo que pesquisas aprofundadas com múltiplos termos e explorações no grafo de conexões ocorram sem interrupções prematuras.
+    - Eliminação da exceção fatal que derrubava o stream SSE ao atingir o limite de iterações. Agora o JARVIS aciona uma rodada de síntese conversacional instruindo o modelo a consolidar e listar para o usuário todas as notas, taxonomias e conexões mapeadas até o momento.
+    - O daemon agora captura falhas de streaming e persiste a resposta explicativa do assistente no banco SQLite, garantindo integridade de histórico mesmo em imprevistos de rede ou limites de tokens da API externa.
+  - **Tratamento Tolerante de Notas Vazias (`patch-engine.ts` & `tool-executor.ts`):**
+    - `propose_create` agora permite preencher notas preexistentes no cofre que estejam vazias (0 bytes), prevenindo loops onde o agente tentava criar e era rejeitado porque o Obsidian já havia criado o arquivo vazio no disco.
+    - `applyPatch` e `propose_block_replace` agora aceitam inicialização em notas com conteúdo vazio sem lançar `PatchNotFoundError`.
+- **Camada Web (`@jarvis/web`):**
+  - **Renderização Escopada de Propostas (`ChatContainer.tsx`):** Os cards de propostas de edição (`ProposalCard`) agora são renderizados estritamente abaixo da mensagem do assistente que disparou a alteração, corrigindo o bug visual onde todas as propostas da sessão eram desenhadas repetidamente em todas as mensagens anteriores do chat.
+  - **Prevenção de 'Desaparecimento Fantasma' no Feed (`useChat.ts` & `ChatContainer.tsx`):**
+    - O hook `useChat.ts` agora garante que mensagens de erro atribuam conteúdo explícito à bolha do assistente, impedindo que ela seja descartada pelo filtro da UI.
+    - O `ChatContainer.tsx` preserva os indicadores de ferramentas e o balão do assistente mesmo durante transições de estado assíncronas.
+- **Qualidade do Monorepo:** 62 testes 100% aprovados (21 no core, 36 no daemon, 5 no web) e build de produção homologado.
+
+---
+
 ## [File Watcher & Sincronização Automática do Grafo] - 2026-10-14
 ### Status: Concluído
 **Detecção em Tempo Real de Alterações no Cofre, Reindexação Reativa do Grafo Semântico e Telemetria Discreta na Web UI**

@@ -169,22 +169,39 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
           </div>
         ) : (
           <div className="max-w-4xl mx-auto space-y-4">
-            {messages.map((msg, index) => {
-              const isLast = index === messages.length - 1;
-              return (
-                <div key={msg.id || index}>
-                  <MessageBubble
-                    message={msg}
-                    isStreaming={isStreaming && isLast && msg.role === 'assistant'}
-                    activeTools={isLast && msg.role === 'assistant' ? activeTools : []}
-                  />
+            {messages
+              .filter((m) => m.role === 'user' || m.role === 'assistant')
+              .filter((m, _, arr) => m.role === 'user' || (m.content && m.content.trim().length > 0) || (m === arr[arr.length - 1] && (isStreaming || activeTools.length > 0)))
+              .map((msg, index, filteredArr) => {
+                const isLast = index === filteredArr.length - 1;
+                return (
+                  <div key={msg.id || index}>
+                    <MessageBubble
+                      message={msg}
+                      isStreaming={isStreaming && isLast && msg.role === 'assistant'}
+                      activeTools={isLast && msg.role === 'assistant' ? activeTools : []}
+                    />
 
-                  {/* Renderização de propostas associadas à conversa */}
-                  {renderProposalCard && msg.role === 'assistant' && (
-                    <div className="ml-12 md:ml-14 my-2">
-                      {proposals.map((proposal) => renderProposalCard(proposal))}
-                    </div>
-                  )}
+                  {/* Renderização de propostas associadas à mensagem específica */}
+                  {renderProposalCard && msg.role === 'assistant' && (() => {
+                    // Vincula propostas pelo messageId; se for a última mensagem do assistente,
+                    // acolhe também propostas recém-chegadas via SSE que ainda não tenham messageId persistido
+                    const matchingProposals = proposals.filter((p) => {
+                      if (p.messageId) {
+                        return p.messageId === msg.id;
+                      }
+                      // Se não tem messageId vinculado (streaming em tempo real ou legado), exibe na última mensagem do assistente
+                      return isLast;
+                    });
+
+                    if (matchingProposals.length === 0) return null;
+
+                    return (
+                      <div className="ml-12 md:ml-14 my-2 space-y-3">
+                        {matchingProposals.map((proposal) => renderProposalCard(proposal))}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

@@ -34,11 +34,12 @@ export interface ServerOptions {
   logger?: boolean;
 }
 
-const defaultAgentFactory: AgentFactory = (profile, ctx, apiKey) =>
+const defaultAgentFactory: AgentFactory = (profile: any, ctx, apiKey) =>
   new JarvisAgent({
     apiKey,
     baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
     model: profile.model,
+    reasoningEffort: profile.reasoningEffort || 'low',
     vaultConventions: ctx.vaultConventions
   });
 
@@ -133,6 +134,7 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       const indexPath = resolve(webDist, 'index.html');
       if (existsSync(indexPath)) {
         reply.header('Content-Type', 'text/html; charset=utf-8');
+        reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
         return reply.send(createReadStream(indexPath));
       }
       return reply.code(404).send({ error: 'Arquivo não encontrado.' });
@@ -299,6 +301,7 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
 
     let finalText = '';
     const pendingArgs: any[] = [];
+    const createdProposalsInTurn: string[] = [];
     const callbacks: ToolCallbacks = {
       onToolStart: (name, args) => {
         pendingArgs.push(args);
@@ -316,6 +319,7 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
             replaceBlock: result.data.replaceBlock,
             unifiedDiff: result.data.unifiedDiff ?? ''
           });
+          createdProposalsInTurn.push(p.id);
           send('proposal', p);
         }
       }
@@ -324,7 +328,8 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
     try {
       const executor = new ToolExecutor(ctx); // sem onApproval: propostas ficam PENDING
       const modelToUse = typeof b.model === 'string' && b.model.trim() ? b.model.trim() : profile.model;
-      const agentProfile = modelToUse === profile.model ? profile : { ...profile, model: modelToUse };
+      const reasoningEffort = b.reasoningEffort || b.thinking_level?.toLowerCase() || 'low';
+      const agentProfile = { ...profile, model: modelToUse, reasoningEffort };
       const agent = agentFactory(agentProfile, ctx, apiKey);
       for await (const chunk of agent.execute(messages, executor, callbacks)) {
         const text = chunk.choices?.[0]?.delta?.content || '';
@@ -337,6 +342,11 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       send('done', { sessionId });
     } catch (e: any) {
       send('error', { message: e.message });
+      if (!finalText) {
+        finalText = `⚠️ **Ocorreu um erro durante o processamento:** ${e.message || 'Erro desconhecido'}`;
+        send('token', { text: finalText });
+      }
+      messages.push({ role: 'assistant', content: finalText });
     } finally {
       // Persiste tudo o que foi gerado nesta rodada (inclui chamadas de ferramenta)
       const toSave: NewMessage[] = [];
@@ -348,7 +358,17 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
           toolCallId: m.tool_call_id ?? null
         });
       }
-      if (toSave.length) sessions.appendMessages(sessionId, toSave);
+      if (toSave.length) {
+        const inserted = sessions.appendMessages(sessionId, toSave);
+        // Vincula o message_id do assistente a todas as propostas emitidas nesta rodada
+        const assistantMsg = inserted.find((m) => m.role === 'assistant');
+        if (assistantMsg && createdProposalsInTurn.length > 0) {
+          const updateStmt = opts.db.prepare('UPDATE proposals SET message_id = ? WHERE id = ?');
+          for (const propId of createdProposalsInTurn) {
+            updateStmt.run(assistantMsg.id, propId);
+          }
+        }
+      }
       raw.end();
     }
   });

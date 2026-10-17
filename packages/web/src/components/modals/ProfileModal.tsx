@@ -109,21 +109,39 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-              Modelo Padrão Inicial:
+            <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+                Modelo Padrão Inicial:
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">ID OpenRouter</span>
             </label>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-700/80 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 text-xs text-slate-100 font-mono outline-none transition-all cursor-pointer"
-            >
-              {CURATED_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.provider}) — {m.badge}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-1.5">
+              <select
+                value={CURATED_MODELS.some(m => m.id === model) ? model : 'custom'}
+                onChange={(e) => {
+                  if (e.target.value !== 'custom') {
+                    setModel(e.target.value);
+                  }
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-700/80 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 text-xs text-slate-100 font-mono outline-none transition-all cursor-pointer"
+              >
+                {CURATED_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.provider}) — {m.badge}
+                  </option>
+                ))}
+                <option value="custom">Outro Modelo (Personalizado)...</option>
+              </select>
+
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="ex: google/gemini-2.5-flash"
+                className="w-full px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-cyan-300 font-mono outline-none focus:border-cyan-500"
+              />
+            </div>
           </div>
 
           <div>

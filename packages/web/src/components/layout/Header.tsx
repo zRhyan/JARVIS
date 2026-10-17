@@ -158,7 +158,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>Modelos Curados Homologados</span>
                 <Sparkles className="h-3 w-3 text-cyan-400" />
               </div>
-              <div className="py-1 space-y-1">
+              <div className="py-1 space-y-1 max-h-72 overflow-y-auto">
                 {CURATED_MODELS.map((m: CuratedModel) => {
                   const isSelected = m.id === selectedModel;
                   const isDefaultOfProfile = activeProfile && activeProfile.model === m.id;
@@ -192,6 +192,40 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Inserção de Modelo Personalizado OpenRouter */}
+              <div className="p-2 pt-2.5 mt-1 border-t border-slate-800/80 bg-slate-950/60 rounded-xl">
+                <span className="block text-[10px] font-semibold text-slate-400 mb-1">
+                  Outro Modelo (ID OpenRouter):
+                </span>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const form = e.currentTarget;
+                    const input = form.elements.namedItem('customModel') as HTMLInputElement;
+                    const val = input?.value.trim();
+                    if (val) {
+                      onSelectModel(val);
+                      setModelDropdownOpen(false);
+                    }
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <input
+                    name="customModel"
+                    type="text"
+                    defaultValue={!currentCurated ? selectedModel : ''}
+                    placeholder="ex: google/gemini-2.5-flash"
+                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700/80 text-[11px] font-mono text-cyan-300 placeholder:text-slate-600 outline-none focus:border-cyan-500"
+                  />
+                  <button
+                    type="submit"
+                    className="px-2.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold text-xs transition-colors shrink-0"
+                  >
+                    Usar
+                  </button>
+                </form>
               </div>
             </div>
           )}

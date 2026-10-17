@@ -88,6 +88,52 @@ export class ToolExecutor {
     };
   }
 
+  /**
+   * Resolve tolerantemente o caminho de uma nota no cofre:
+   * 1. Testa se o caminho fornecido existe diretamente.
+   * 2. Testa com extensão .md se tiver sido omitida.
+   * 3. Busca no Grafo em memória por correspondência de basename.
+   * 4. Varre os arquivos físicos no sandbox para localizar a nota pelo nome.
+   */
+  public async resolveNotePath(inputPath: string): Promise<string> {
+    const clean = inputPath.trim().replace(/^\.\//, '');
+
+    // 1. Testa se o caminho exato existe
+    try {
+      await this.sandbox.readNote(clean);
+      return clean;
+    } catch {}
+
+    // 1.1 Testa adicionando .md se omitido
+    if (!clean.endsWith('.md')) {
+      try {
+        await this.sandbox.readNote(clean + '.md');
+        return clean + '.md';
+      } catch {}
+    }
+
+    // 2. Tenta resolução via grafo (com suporte a basename)
+    const fromGraph = this.graph.resolveNotePath(clean);
+    if (fromGraph) {
+      return fromGraph;
+    }
+
+    // 3. Fallback: varre o cofre pelo basename
+    const baseName = (clean.split('/').pop() || '').replace(/\.md$/i, '').trim().toLowerCase();
+    try {
+      const allFiles = await this.sandbox.listMarkdownFiles();
+      const fileMatch = allFiles.find(f => {
+        const fBase = (f.split('/').pop() || '').replace(/\.md$/i, '').trim().toLowerCase();
+        return fBase === baseName;
+      });
+      if (fileMatch) {
+        return fileMatch;
+      }
+    } catch {}
+
+    return clean;
+  }
+
   private async handleReadNote(args: Record<string, any>): Promise<ToolExecutionResult> {
     const notePath = args.path;
     if (!notePath || typeof notePath !== 'string') {
@@ -98,7 +144,8 @@ export class ToolExecutor {
       };
     }
 
-    const result = await this.sandbox.readNote(notePath.trim());
+    const resolvedPath = await this.resolveNotePath(notePath);
+    const result = await this.sandbox.readNote(resolvedPath);
 
     return {
       tool: 'read_note',
@@ -122,7 +169,7 @@ export class ToolExecutor {
       };
     }
 
-    const cleanPath = notePath.trim();
+    const cleanPath = await this.resolveNotePath(notePath);
     const node = this.graph.getNote(cleanPath);
     const outlinks = this.graph.getOutlinks(cleanPath);
     const backlinks = this.graph.getBacklinks(cleanPath);
@@ -156,12 +203,17 @@ export class ToolExecutor {
     const matches: Array<{ path: string; line: number; snippet: string }> = [];
 
     for (const file of allFiles) {
+      const fileNameLower = file.toLowerCase();
+      const matchesPath = fileNameLower.includes(cleanQuery);
+
       try {
         const { content } = await this.sandbox.readNote(file);
         const lines = content.split('\n');
+        let matchedInLines = false;
 
         lines.forEach((line, idx) => {
           if (line.toLowerCase().includes(cleanQuery)) {
+            matchedInLines = true;
             matches.push({
               path: file,
               line: idx + 1,
@@ -169,8 +221,26 @@ export class ToolExecutor {
             });
           }
         });
+
+        // Se o termo estiver no nome/caminho do arquivo mas não houver ocorrência específica de linha,
+        // inclui a nota com snippet evidenciando o título/arquivo
+        if (matchesPath && !matchedInLines) {
+          const header = lines.find((l) => l.startsWith('#')) || lines.find((l) => l.trim().length > 0);
+          matches.push({
+            path: file,
+            line: 1,
+            snippet: header ? `Nota: [[${file.replace(/\.md$/, '')}]] (${header.trim()})` : `Nota: [[${file.replace(/\.md$/, '')}]]`
+          });
+        }
       } catch {
-        // Ignora arquivos que não possam ser lidos temporariamente
+        // Se falhar ao ler conteúdo mas casou no path, inclui a nota
+        if (matchesPath) {
+          matches.push({
+            path: file,
+            line: 1,
+            snippet: `Nota: [[${file.replace(/\.md$/, '')}]]`
+          });
+        }
       }
     }
 
@@ -205,16 +275,16 @@ export class ToolExecutor {
       };
     }
 
-
-    // 1. Lê a nota atual para capturar o conteúdo original e o hash base
-    const currentNote = await this.sandbox.readNote(notePath.trim());
+    // 1. Resolve o caminho tolerante da nota e lê o conteúdo atual com baseHash
+    const resolvedPath = await this.resolveNotePath(notePath);
+    const currentNote = await this.sandbox.readNote(resolvedPath);
 
     // 2. Computa a substituição e o Unified Diff usando o PatchEngine
     const patchResult = this.patchEngine.applySearchAndReplace(
       currentNote.content,
       searchBlock,
       replaceBlock,
-      notePath.trim()
+      resolvedPath
     );
 
     if (!patchResult.isSuccess || !patchResult.patchedContent) {
@@ -228,7 +298,7 @@ export class ToolExecutor {
     // 3. Se houver um manipulador de aprovação configurado (ex: CLI interativo ou Web UI)
     if (this.onApproval) {
       const isApproved = await this.onApproval({
-        path: notePath.trim(),
+        path: resolvedPath,
         baseHash: currentNote.contentHash,
         unifiedDiff: patchResult.unifiedDiff || '',
         patchedContent: patchResult.patchedContent
@@ -236,14 +306,14 @@ export class ToolExecutor {
 
       if (isApproved) {
         // Gravação atômica direta no disco após confirmação do usuário
-        const writeResult = await this.sandbox.writeAtomic(notePath.trim(), patchResult.patchedContent);
+        const writeResult = await this.sandbox.writeAtomic(resolvedPath, patchResult.patchedContent);
         this.graph.addNote(writeResult.relativePath, writeResult.content);
 
         return {
           tool: 'propose_block_replace',
           isSuccess: true,
           data: {
-            path: notePath.trim(),
+            path: resolvedPath,
             status: 'APPLIED',
             contentHash: writeResult.contentHash,
             unifiedDiff: patchResult.unifiedDiff,
@@ -255,7 +325,7 @@ export class ToolExecutor {
           tool: 'propose_block_replace',
           isSuccess: true,
           data: {
-            path: notePath.trim(),
+            path: resolvedPath,
             status: 'REJECTED',
             unifiedDiff: patchResult.unifiedDiff,
             message: 'A proposta de alteração foi REJEITADA pelo usuário. O arquivo em disco permaneceu intacto.'
@@ -268,7 +338,7 @@ export class ToolExecutor {
       tool: 'propose_block_replace',
       isSuccess: true,
       data: {
-        path: notePath.trim(),
+        path: resolvedPath,
         baseHash: currentNote.contentHash,
         status: 'PENDING',
         searchBlock,
@@ -278,7 +348,6 @@ export class ToolExecutor {
         instructions: 'Proposta de alteração gerada com sucesso. O Diff unificado está pronto para revisão e aprovação.'
       }
     };
-
   }
 
   private async handleProposeCreate(args: Record<string, any>): Promise<ToolExecutionResult> {
@@ -295,14 +364,17 @@ export class ToolExecutor {
 
     const cleanPath = notePath.trim();
 
-    // 1. Garante que o arquivo não existe previamente
+    // 1. Garante que o arquivo não existe previamente com conteúdo
     try {
-      await this.sandbox.readNote(cleanPath);
-      return {
-        tool: 'propose_create',
-        isSuccess: false,
-        error: `O arquivo "${cleanPath}" já existe no cofre. Para alterá-lo, utilize "propose_block_replace".`
-      };
+      const existing = await this.sandbox.readNote(cleanPath);
+      if (existing.content.trim().length > 0) {
+        return {
+          tool: 'propose_create',
+          isSuccess: false,
+          error: `O arquivo "${cleanPath}" já existe no cofre e contém conteúdo. Para alterá-lo, utilize "propose_block_replace".`
+        };
+      }
+      // Se o arquivo existe no disco mas está vazio (0 bytes), permite inicializar o conteúdo sem erro
     } catch {
       // Esperado: o arquivo não existe
     }

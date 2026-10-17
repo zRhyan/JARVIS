@@ -1,7 +1,7 @@
 // packages/daemon/src/vault-context.ts
 
 import { resolve, join } from 'node:path';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
 import { VaultFSSandbox, GraphIndex } from '@jarvis/core';
 
 import type { VaultWatcherService } from './vault-watcher.js';
@@ -95,11 +95,13 @@ export async function initVaultContext(customVaultPath?: string): Promise<VaultC
     mkdirSync(vaultPath, { recursive: true });
     seedDefaultVault(vaultPath);
   } else {
-    // Se o diretório existe mas não tem VAULT.md nem notas, cria a estrutura base
-    const hasFiles = existsSync(join(vaultPath, 'VAULT.md')) || existsSync(join(vaultPath, 'areas'));
-    if (!hasFiles) {
-      seedDefaultVault(vaultPath);
-    }
+    // Se o diretório existe mas está completamente vazio, cria a estrutura base de demonstração
+    try {
+      const entries = readdirSync(vaultPath).filter(e => !e.startsWith('.'));
+      if (entries.length === 0) {
+        seedDefaultVault(vaultPath);
+      }
+    } catch {}
   }
 
   const sandbox = new VaultFSSandbox(vaultPath);

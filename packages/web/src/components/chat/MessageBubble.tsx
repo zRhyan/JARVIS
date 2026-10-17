@@ -33,14 +33,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const [copied, setCopied] = useState(false);
     const match = /language-(\w+)/.exec(className || '');
     const codeString = String(children).replace(/\n$/, '');
+    const hasMultipleLines = codeString.includes('\n');
 
-    const handleCopy = () => {
-      navigator.clipboard.writeText(codeString);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    };
-
-    if (inline) {
+    // Se o código for inline, ou não tiver linguagem definida e tiver apenas uma linha simples, renderiza como code inline sutil
+    if (inline || (!match && !hasMultipleLines)) {
+      // Se for uma referência a nota .md solta dentro de crases, estiliza com o visual Obsidian
+      if (typeof children === 'string' && children.trim().endsWith('.md')) {
+        return <WikilinkText content={children.trim()} />;
+      }
       return (
         <code className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-300 font-mono text-[11px]" {...props}>
           {children}
@@ -48,12 +48,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       );
     }
 
+    const handleCopy = () => {
+      navigator.clipboard.writeText(codeString);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    };
+
     return (
       <div className="my-2 rounded-xl border border-slate-800 bg-slate-950/90 overflow-hidden text-xs">
         <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/80 border-b border-slate-800 text-slate-400 font-mono text-[10px]">
           <span className="flex items-center gap-1.5">
             <Terminal className="h-3 w-3 text-cyan-400" />
-            {match ? match[1] : 'code'}
+            {match ? match[1] : 'snippet'}
           </span>
           <button
             onClick={handleCopy}
@@ -79,16 +85,33 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     );
   };
 
-  // Processa texto puro para estilizar [[wikilinks]]
-  const ParagraphRenderer = ({ children }: any) => {
-    if (typeof children === 'string') {
-      return (
-        <p className="mb-2 leading-relaxed">
-          <WikilinkText content={children} />
-        </p>
-      );
+  // Processa texto recursivamente para aplicar WikilinkText em strings filhas
+  const renderWithWikilinks = (node: any): any => {
+    if (typeof node === 'string') {
+      return <WikilinkText content={node} />;
     }
-    return <p className="mb-2 leading-relaxed">{children}</p>;
+    if (Array.isArray(node)) {
+      return node.map((child, idx) => (
+        <React.Fragment key={idx}>{renderWithWikilinks(child)}</React.Fragment>
+      ));
+    }
+    if (React.isValidElement(node)) {
+      const element = node as React.ReactElement<any>;
+      if (element.props && element.props.children) {
+        return React.cloneElement(element, {
+          children: renderWithWikilinks(element.props.children)
+        });
+      }
+    }
+    return node;
+  };
+
+  const ParagraphRenderer = ({ children }: any) => {
+    return <p className="mb-2 leading-relaxed">{renderWithWikilinks(children)}</p>;
+  };
+
+  const ListItemRenderer = ({ children }: any) => {
+    return <li className="my-1 leading-relaxed text-slate-300">{renderWithWikilinks(children)}</li>;
   };
 
   if (isUser) {
@@ -134,7 +157,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   remarkPlugins={[remarkGfm]}
                   components={{
                     code: CodeBlock,
-                    p: ParagraphRenderer
+                    p: ParagraphRenderer,
+                    li: ListItemRenderer
                   }}
                 >
                   {message.content}

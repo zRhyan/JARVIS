@@ -46,6 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, seq);
 CREATE TABLE IF NOT EXISTS proposals (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
+    message_id TEXT,
     note_path TEXT NOT NULL,
     base_hash TEXT NOT NULL,
     search_block TEXT NOT NULL,
@@ -75,5 +76,12 @@ export function openDatabase(dataDir: string, inMemory = false): JarvisDB {
   }
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
+
+  // Migração defensiva: adiciona message_id em bases existentes
+  const columns = db.prepare("PRAGMA table_info(proposals)").all() as Array<{ name: string }>;
+  if (columns.length > 0 && !columns.some((c) => c.name === 'message_id')) {
+    db.exec("ALTER TABLE proposals ADD COLUMN message_id TEXT;");
+  }
+
   return db;
 }

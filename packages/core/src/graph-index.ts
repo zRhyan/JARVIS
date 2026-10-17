@@ -93,8 +93,36 @@ export class GraphIndex {
   }
 
   public getNote(path: string): NoteNode | undefined {
-    const normalizedPath = path.split('\\').join('/').replace(/^\.\//, '');
-    return this.nodes.get(normalizedPath);
+    const normalizedPath = path.split('\\').join('/').trim().replace(/^\.\//, '');
+    if (this.nodes.has(normalizedPath)) {
+      return this.nodes.get(normalizedPath);
+    }
+
+    // Tenta com .md se omitido
+    if (!normalizedPath.endsWith('.md') && this.nodes.has(normalizedPath + '.md')) {
+      return this.nodes.get(normalizedPath + '.md');
+    }
+
+    // Tenta sem .md se incluído
+    if (normalizedPath.endsWith('.md') && this.nodes.has(normalizedPath.replace(/\.md$/i, ''))) {
+      return this.nodes.get(normalizedPath.replace(/\.md$/i, ''));
+    }
+
+    // Busca tolerante por basename (ignora pastas e case-insensitive)
+    const baseName = (normalizedPath.split('/').pop() || '').replace(/\.md$/i, '').trim().toLowerCase();
+    for (const [key, node] of this.nodes.entries()) {
+      const nodeBase = (key.split('/').pop() || '').replace(/\.md$/i, '').trim().toLowerCase();
+      if (nodeBase === baseName) {
+        return node;
+      }
+    }
+
+    return undefined;
+  }
+
+  public resolveNotePath(nameOrPath: string): string | undefined {
+    const node = this.getNote(nameOrPath);
+    return node?.path;
   }
 
   /**

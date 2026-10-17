@@ -8,6 +8,7 @@ export interface AgentConfig {
   apiKey: string;
   baseURL?: string;
   model?: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
   vaultConventions?: string;
 }
 
@@ -22,7 +23,12 @@ export interface ToolCallbacks {
 export function buildSystemPrompt(vaultConventions?: string): string {
   let prompt = `Você é o JARVIS, assistente de engenharia e gestão de conhecimento da equipe.
 Seu objetivo é gerenciar e estruturar o cofre do Obsidian utilizando ferramentas de percepção e ação com precisão absoluta.
-Nunca alucine notas inexistentes e respeite rigorosamente as taxonomias de Áreas e Conceitos.
+Nunca alucine notas inexistentes e respeite a estrutura de pastas e notas do cofre.
+
+[RESOLUÇÃO DE NOTAS E PASTAS]
+- No cofre do Obsidian, as notas estão organizadas em diretórios temáticos (ex: '1 - Fields', '6 - Main Notes', etc.).
+- Ao chamar ferramentas que recebem 'path' ('read_note', 'get_graph_neighborhood', 'propose_block_replace'): você pode fornecer o caminho relativo completo SE já o conheceu, OU simplesmente o nome limpo da nota (com ou sem .md, ex: "Field - Operational Systems OS"). O sistema JARVIS localiza e resolve automaticamente o arquivo correto em qualquer pasta do cofre.
+- NUNCA invente ou adivinhe pastas fictícias (ex: NÃO invente pastas como "Areas/" ou "conceitos/"). Se não souber a pasta exata da nota, passe apenas o nome limpo da nota ou use 'search_notes'.
 
 [DIRETRIZES DE USO DE FERRAMENTAS]
 1. Para responder dúvidas conceituais, use 'get_graph_neighborhood' para descobrir conceitos pressupostos (Presupposed Concepts) e 'read_note' para examinar o conteúdo.
@@ -33,7 +39,14 @@ Nunca alucine notas inexistentes e respeite rigorosamente as taxonomias de Área
    - SEMPRE chame 'read_note' PRIMEIRO para inspecionar o conteúdo atual da nota antes de emitir a proposta.
    - Para ADICIONAR texto ao final do arquivo: utilize 'search_block: "$END"' e coloque o novo texto em 'replace_block' (ou use as últimas linhas do arquivo como 'search_block' e adicione o novo texto em 'replace_block').
    - Para INSERIR texto no meio ou após uma seção: copie o trecho de referência existente para 'search_block' e em 'replace_block' repita esse trecho acompanhado do novo texto.
+   - Ao inserir wikilinks em notas (seja no Map of Content, links relacionados ou texto), NUNCA inclua o caminho de pastas nem a extensão .md. Use SEMPRE apenas o nome limpo da nota (ex: '[[Defintion - All Inference Rules in First Order Logic FOL]]' em vez de '[[6 - Main Notes/Defintion - All Inference Rules in First Order Logic FOL]]').
 4. Para sugerir novas notas, use 'propose_create' respeitando os templates e taxonomias da equipe.
+
+[DIRETRIZES DE FORMATAÇÃO E RESPOSTA]
+- Ao citar ou listar notas do cofre, utilize SEMPRE wikilinks do Obsidian usando apenas o nome limpo da nota: '[[Nome da Nota]]' (NUNCA inclua caminhos de diretórios como '[[Pasta/Subpasta/Nome]]' nem '.md').
+- Ao listar notas do cofre, utilize SEMPRE tópicos (bullet points) organizados.
+- NUNCA despeje trechos brutos de tabelas incompletas ou caracteres soltos (como barras '|' isoladas). Se for incluir um trecho, MoC ou descrição sobre a nota, coloque-o indentado com recuo abaixo do bullet point da respectiva nota com uma explicação limpa.
+- Se a mensagem do usuário pedir para pesquisar, buscar ou mapear notas para listar ou para decidirem em seguida onde incluí-las (ex: "pesquise notas sobre X e depois decidimos em qual sumário colocar"), LIMITE-SE a pesquisar e listar as notas encontradas no formato de bullet points. NÃO emita propostas de modificação nem tente editar arquivos prematuramente antes da instrução explícita do usuário.
 `.trim();
 
 
@@ -47,12 +60,13 @@ Nunca alucine notas inexistentes e respeite rigorosamente as taxonomias de Área
 export class JarvisAgent {
   private client: OpenAI;
   private model: string;
+  private reasoningEffort?: 'low' | 'medium' | 'high';
   private vaultConventions?: string;
 
   constructor(config: AgentConfig | string, baseURL?: string, model?: string) {
     let apiKey: string;
     let base: string = 'https://openrouter.ai/api/v1';
-    let mdl: string = 'google/gemini-2.5-flash';
+    let mdl: string = 'google/gemini-3.8-flash';
 
     if (typeof config === 'string') {
       apiKey = config;
@@ -62,6 +76,7 @@ export class JarvisAgent {
       apiKey = config.apiKey;
       if (config.baseURL) base = config.baseURL;
       if (config.model) mdl = config.model;
+      this.reasoningEffort = config.reasoningEffort;
       this.vaultConventions = config.vaultConventions;
     }
 
@@ -69,8 +84,8 @@ export class JarvisAgent {
       apiKey,
       baseURL: base,
       defaultHeaders: {
-        'HTTP-Referer': 'http://localhost:3000',
-        'X-Title': 'JARVIS CLI',
+        'HTTP-Referer': 'https://github.com/zrhyan/JARVIS',
+        'X-Title': 'JARVIS Local Agent',
       },
     });
     this.model = mdl;
@@ -86,19 +101,25 @@ export class JarvisAgent {
     toolExecutor: ToolExecutor,
     callbacks?: ToolCallbacks
   ): AsyncGenerator<OpenAI.Chat.Completions.ChatCompletionChunk, void, unknown> {
-    const maxIterations = 10;
+    const maxIterations = 25;
     let iteration = 0;
 
     while (iteration < maxIterations) {
       iteration++;
 
       // 1. Chamada de inferência com ferramentas habilitadas (não-streaming para tool calling seguro)
+      const extraParams: Record<string, any> = {};
+      if (this.reasoningEffort) {
+        extraParams.reasoning = { effort: this.reasoningEffort };
+      }
+
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: messages,
         tools: jarvisTools,
-        stream: false
-      });
+        stream: false,
+        ...extraParams
+      } as any);
 
       const choice = response.choices[0];
       const message = choice.message;
@@ -139,12 +160,30 @@ export class JarvisAgent {
       }
 
       // 3. Se não há tool calls, o modelo gerou a resposta final.
-      // Realizamos o streaming contínuo da resposta final para a interface/CLI
+      // O modelo já forneceu a resposta completa no step 1 em `message.content`.
+      if (message.content) {
+        // Envia o conteúdo diretamente em chunks (simulando stream fluido) para o SSE
+        const chunkSize = 24;
+        for (let i = 0; i < message.content.length; i += chunkSize) {
+          yield {
+            id: response.id,
+            choices: [{
+              delta: { content: message.content.slice(i, i + chunkSize) }
+            }]
+          } as any;
+          // Pequeno micro-delay para permitir que o frontend faça render suave caso haja muito texto
+          await new Promise((r) => setTimeout(r, 10));
+        }
+        return;
+      }
+
+      // Fallback de segurança: caso message.content venha vazio, fazemos chamada de streaming
       const finalStream = await this.client.chat.completions.create({
         model: this.model,
         messages: messages,
-        stream: true
-      });
+        stream: true,
+        ...extraParams
+      } as any);
 
       for await (const chunk of finalStream) {
         if ((chunk as any).error) {
@@ -156,6 +195,56 @@ export class JarvisAgent {
       return;
     }
 
-    throw new Error('Limite máximo de iterações do ReAct atingido sem resposta conclusiva.');
+    // Se atingiu o limite de iterações sem emitir a resposta final,
+    // instrui o LLM a sintetizar as descobertas feitas até o momento em vez de abortar abruptamente.
+    messages.push({
+      role: 'system',
+      content:
+        'Atenção: O limite de consultas de ferramentas para esta rodada foi atingido. NÃO faça novas chamadas de ferramentas. Apresente agora ao usuário uma resposta completa, clara e organizada com todas as notas, relações e descobertas encontradas até o momento.'
+    });
+
+    const fallbackExtraParams: Record<string, any> = {};
+    if (this.reasoningEffort) {
+      fallbackExtraParams.reasoning = { effort: this.reasoningEffort };
+    }
+
+    try {
+      const synthesisResponse = await this.client.chat.completions.create({
+        model: this.model,
+        messages: messages,
+        stream: false,
+        ...fallbackExtraParams
+      } as any);
+      const synthesisContent = synthesisResponse.choices[0]?.message?.content || '';
+      if (synthesisContent) {
+        const chunkSize = 24;
+        for (let i = 0; i < synthesisContent.length; i += chunkSize) {
+          yield {
+            id: synthesisResponse.id,
+            choices: [{
+              delta: { content: synthesisContent.slice(i, i + chunkSize) }
+            }]
+          } as any;
+          await new Promise((r) => setTimeout(r, 10));
+        }
+        return;
+      }
+    } catch {
+      // Caso a chamada não-streaming falhe, tenta o fallback com streaming abaixo
+    }
+
+    const fallbackStream = await this.client.chat.completions.create({
+      model: this.model,
+      messages: messages,
+      stream: true,
+      ...fallbackExtraParams
+    } as any);
+
+    for await (const chunk of fallbackStream) {
+      if ((chunk as any).error) {
+        throw new Error(`OpenRouter Error: ${JSON.stringify((chunk as any).error)}`);
+      }
+      yield chunk;
+    }
   }
 }
