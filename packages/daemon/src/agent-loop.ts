@@ -126,6 +126,7 @@ export class JarvisAgent {
 
       // 2. Se o modelo invocou chamadas de ferramenta
       if (message.tool_calls && message.tool_calls.length > 0) {
+        console.log(`[JARVIS Agent] Rodada ReAct (iteração ${iteration}): modelo solicitou ${message.tool_calls.length} ferramenta(s): ${message.tool_calls.map((t) => t.function.name).join(', ')}`);
         messages.push(message);
 
         for (const toolCall of message.tool_calls) {
@@ -162,6 +163,7 @@ export class JarvisAgent {
       // 3. Se não há tool calls, o modelo gerou a resposta final.
       // O modelo já forneceu a resposta completa no step 1 em `message.content`.
       if (message.content) {
+        console.log(`[JARVIS Agent] Rodada ReAct (iteração ${iteration}): modelo concluiu raciocínio com resposta direta (${message.content.length} caracteres).`);
         // Envia o conteúdo diretamente em chunks (simulando stream fluido) para o SSE
         const chunkSize = 24;
         for (let i = 0; i < message.content.length; i += chunkSize) {
@@ -178,21 +180,34 @@ export class JarvisAgent {
       }
 
       // Fallback de segurança: caso message.content venha vazio, fazemos chamada de streaming
-      const finalStream = await this.client.chat.completions.create({
-        model: this.model,
-        messages: messages,
-        stream: true,
-        ...extraParams
-      } as any);
+      let streamedChars = 0;
+      try {
+        const finalStream = await this.client.chat.completions.create({
+          model: this.model,
+          messages: messages,
+          stream: true,
+          ...extraParams
+        } as any);
 
-      for await (const chunk of finalStream) {
-        if ((chunk as any).error) {
-          throw new Error(`OpenRouter Error: ${JSON.stringify((chunk as any).error)}`);
+        for await (const chunk of finalStream) {
+          if ((chunk as any).error) {
+            throw new Error(`OpenRouter Error: ${JSON.stringify((chunk as any).error)}`);
+          }
+          const text = chunk.choices?.[0]?.delta?.content || '';
+          if (text) {
+            streamedChars += text.length;
+          }
+          yield chunk;
         }
-        yield chunk;
+      } catch (streamErr: any) {
+        console.warn('[JARVIS Agent] Falha na tentativa de streaming de fallback:', streamErr.message);
       }
 
-      return;
+      if (streamedChars > 0) {
+        return;
+      }
+
+      console.warn('[JARVIS Agent] Fallback de streaming retornou 0 caracteres. Prosseguindo para recuperação com síntese explícita.');
     }
 
     // Se atingiu o limite de iterações sem emitir a resposta final,

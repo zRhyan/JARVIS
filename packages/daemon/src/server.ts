@@ -336,6 +336,7 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       const reasoningEffort = b.reasoningEffort || b.thinking_level?.toLowerCase() || 'low';
       const agentProfile = { ...profile, model: modelToUse, reasoningEffort };
       const agent = agentFactory(agentProfile, ctx, apiKey);
+      console.log(`[JARVIS Server] Iniciando execução do agente na sessão ${sessionId} (modelo: "${modelToUse}")...`);
       for await (const chunk of agent.execute(messages, executor, callbacks)) {
         const text = chunk.choices?.[0]?.delta?.content || '';
         if (text) {
@@ -343,9 +344,17 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
           send('token', { text });
         }
       }
+
+      if (!finalText.trim()) {
+        console.warn(`[JARVIS Server] Aviso: Agente concluiu sem emitir texto na sessão ${sessionId}. Injetando mensagem explicativa.`);
+        finalText = `⚠️ **O modelo concluiu a operação sem emitir uma resposta textual.** Caso tenha solicitado uma ação no cofre (como criação ou alteração de nota), verifique os arquivos ou tente reformular sua solicitação.`;
+        send('token', { text: finalText });
+      }
+
       messages.push({ role: 'assistant', content: finalText });
       send('done', { sessionId });
     } catch (e: any) {
+      console.error(`[JARVIS Server] Erro na inferência da sessão ${sessionId}:`, e);
       send('error', { message: e.message });
       if (!finalText) {
         finalText = `⚠️ **Ocorreu um erro durante o processamento:** ${e.message || 'Erro desconhecido'}`;
