@@ -1,7 +1,7 @@
 // packages/web/src/components/modals/ProfileModal.tsx
 
 import React, { useState } from 'react';
-import { FolderGit2, X, AlertCircle, Plus, Sparkles } from 'lucide-react';
+import { FolderGit2, X, AlertCircle, Plus, Sparkles, KeyRound, ExternalLink } from 'lucide-react';
 import { CURATED_MODELS } from '../../types/api';
 
 interface ProfileModalProps {
@@ -30,6 +30,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
       setError('Por favor, informe o caminho absoluto do cofre Obsidian.');
       return;
     }
+    if (!apiKey.trim()) {
+      setError('Por favor, informe sua Chave de API do OpenRouter.');
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
@@ -38,7 +42,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
         name: name.trim(),
         vaultPath: vaultPath.trim(),
         model: model.trim(),
-        apiKey: apiKey.trim() || undefined
+        apiKey: apiKey.trim()
       });
       setName('');
       setVaultPath('');
@@ -145,18 +149,31 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
-              Chave de API OpenRouter (Opcional):
+            <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <KeyRound className="h-3.5 w-3.5 text-amber-400" />
+                Chave de API OpenRouter:
+              </span>
+              <a
+                href="https://openrouter.ai/keys"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors"
+              >
+                <span>Obter chave</span>
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
             </label>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-or-v1-... (deixe em branco para usar OPENROUTER_API_KEY global)"
+              placeholder="sk-or-v1-..."
+              required
               className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-700/80 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 text-xs text-slate-100 placeholder:text-slate-600 font-mono outline-none transition-all"
             />
             <p className="text-[10px] text-slate-500 mt-1">
-              A chave fica gravada no SQLite com permissão 0600 e nunca é exposta em logs.
+              Obrigatória para processar comandos com a IA. Fica gravada no SQLite local com permissão 0600.
             </p>
           </div>
 

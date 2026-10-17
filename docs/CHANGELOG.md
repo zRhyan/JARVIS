@@ -15,6 +15,8 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
   - **Linux / macOS (`jarvis.sh`):** Script executável `./jarvis.sh` com fluxo inteligente de inicialização e compilação automática na primeira execução.
   - **Atalho no Menu de Programas do Linux (`scripts/install-desktop-shortcut.sh`):** Instala o atalho `jarvis.desktop` e o ícone vetorial oficial em `~/.local/share/applications`, permitindo abrir o JARVIS pelo menu de aplicativos do Ubuntu/Debian/Fedora.
   - **Ícone Oficial Vetorial (`docs/jarvis-icon.svg`):** Criado design HUD moderno em SVG com reator Arc Reactor neon.
+- **Experiência de Onboarding e Criação de Perfil (`ProfileModal.tsx`):**
+  - **Chave de API Obrigatória:** Eliminado o rótulo ambíguo "(Opcional)" do campo de chave de API no formulário de novos perfis. Agora o campo é validado como obrigatório (`required`), acompanhado de ícone dedicado e link direto *"Obter chave"* para o portal do OpenRouter (`https://openrouter.ai/keys`), prevenindo que novos usuários iniciem perfis sem credenciais e encontrem erros ao enviar mensagens.
 - **Documentação e Onboarding (`README.md`):**
   - Adicionado guia direto de início rápido com instruções de 1 clique para Windows e Linux, facilitando a distribuição pública no GitHub.
 - **Qualidade do Monorepo:** 67 testes aprovados e cobertura total das novas funções de autenticação e bootstrap.
