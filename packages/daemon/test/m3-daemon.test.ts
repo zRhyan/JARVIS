@@ -1,5 +1,5 @@
 // packages/daemon/test/m3-daemon.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +11,10 @@ import { generateAndSaveToken, getOrGenerateToken, verifyBearer } from '../src/a
 import { resolveDataDir } from '../src/paths.js';
 import { initVaultContext } from '../src/vault-context.js';
 import { buildServer, type AgentFactory } from '../src/server.js';
+
+vi.mock('../src/folder-picker.js', () => ({
+  pickFolderNative: vi.fn().mockResolvedValue('/mock/selected/vault'),
+}));
 
 let tmp: string;
 let vault: string;
@@ -269,6 +273,14 @@ describe('API HTTP', () => {
     const res = await a.inject({ method: 'GET', url: '/' });
     expect(res.statusCode).toBe(200);
     expect(res.payload).toContain('JARVIS — Obsidian AI Copilot');
+    await a.close();
+  });
+
+  it('endpoint pick-folder responde com status 200', async () => {
+    const a = await app();
+    const res = await a.inject({ method: 'POST', url: '/api/system/pick-folder', headers: auth });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ path: '/mock/selected/vault' });
     await a.close();
   });
 });

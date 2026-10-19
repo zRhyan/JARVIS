@@ -118,5 +118,12 @@ export const apiClient = {
     return request<{ proposal: Proposal }>(`/api/proposals/${encodeURIComponent(id)}/reject`, {
       method: 'POST'
     });
+  },
+
+  // Sistema / Seletor Nativo
+  async pickFolder(): Promise<{ path: string | null }> {
+    return request<{ path: string | null }>('/api/system/pick-folder', {
+      method: 'POST'
+    });
   }
 };

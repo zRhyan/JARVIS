@@ -188,3 +188,26 @@ describe('Intro Config Service', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('API Client pickFolder', () => {
+  it('deve chamar /api/system/pick-folder via POST e retornar o caminho', async () => {
+    const mockResponse = { path: '/home/usuario/Obsidian/MeuCofre' };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(mockResponse)
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { apiClient } = await import('../src/services/api-client');
+    const result = await apiClient.pickFolder();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/system/pick-folder',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(result.path).toBe('/home/usuario/Obsidian/MeuCofre');
+
+    vi.unstubAllGlobals();
+  });
+});

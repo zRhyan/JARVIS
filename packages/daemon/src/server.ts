@@ -14,6 +14,7 @@ import type { JarvisDB } from './db.js';
 import { ProfileRepository, toPublic, type Profile } from './profile-repo.js';
 import { SessionRepository, type NewMessage } from './session-repo.js';
 import { ProposalStateManager, ProposalStateError, type ProposalStatus } from './proposal-manager.js';
+import { pickFolderNative } from './folder-picker.js';
 
 export interface AgentLike {
   execute(
@@ -172,6 +173,16 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       activeProfile: active ? toPublic(active) : null,
       vault: vaultStats
     };
+  });
+
+  // ---- Sistema: Seletor Nativo de Pastas ----
+  app.post('/api/system/pick-folder', async (req, reply) => {
+    try {
+      const folderPath = await pickFolderNative();
+      return { path: folderPath };
+    } catch (e: any) {
+      return reply.code(500).send({ error: e.message || 'Falha ao acionar seletor de pastas nativo.' });
+    }
   });
 
   // ---- Perfis ----
