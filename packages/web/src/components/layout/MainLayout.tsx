@@ -8,6 +8,8 @@ import { ProfileModal } from '../modals/ProfileModal';
 import type { Profile, Session, VaultStats } from '../../types/api';
 import { hasAuthToken } from '../../services/auth-storage';
 
+import type { ReasoningEffort } from '../../types/api';
+
 interface MainLayoutProps {
   profiles: Profile[];
   activeProfile: Profile | null;
@@ -15,6 +17,8 @@ interface MainLayoutProps {
   onCreateProfile: (data: { name: string; vaultPath: string; model: string; apiKey?: string }) => Promise<any>;
   selectedModel: string;
   onSelectModel: (modelId: string) => void;
+  selectedReasoningEffort: ReasoningEffort;
+  onSelectReasoningEffort: (effort: ReasoningEffort) => void;
   onSetDefaultModel: (profileId: string, modelId: string) => Promise<void>;
   sessions: Session[];
   activeSessionId: string | null;
@@ -37,6 +41,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   onCreateProfile,
   selectedModel,
   onSelectModel,
+  selectedReasoningEffort,
+  onSelectReasoningEffort,
   onSetDefaultModel,
   sessions,
   activeSessionId,
@@ -86,6 +92,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           onOpenNewProfileModal={() => setProfileModalOpen(true)}
           selectedModel={selectedModel}
           onSelectModel={onSelectModel}
+          selectedReasoningEffort={selectedReasoningEffort}
+          onSelectReasoningEffort={onSelectReasoningEffort}
           onSetDefaultModel={onSetDefaultModel}
           onOpenAuthTokenModal={() => setAuthTokenModalOpen(true)}
           hasToken={hasTokenState}

@@ -27,7 +27,11 @@ export interface UseChatResult {
   isStreaming: boolean;
   isLoadingSession: boolean;
   error: string | null;
-  sendMessage: (text: string, modelOverride?: string) => Promise<void>;
+  sendMessage: (
+    text: string,
+    modelOverride?: string,
+    reasoningEffortOverride?: 'low' | 'medium' | 'high'
+  ) => Promise<void>;
   approveProposal: (proposalId: string) => Promise<Proposal>;
   rejectProposal: (proposalId: string) => Promise<Proposal>;
   abortStream: () => void;
@@ -98,7 +102,11 @@ export function useChat({ sessionId, onSessionCreated, onSessionUpdated }: UseCh
   }, []);
 
   const sendMessage = useCallback(
-    async (text: string, modelOverride?: string) => {
+    async (
+      text: string,
+      modelOverride?: string,
+      reasoningEffortOverride?: 'low' | 'medium' | 'high'
+    ) => {
       if (!text.trim() || isStreaming) return;
 
       setError(null);
@@ -137,6 +145,7 @@ export function useChat({ sessionId, onSessionCreated, onSessionUpdated }: UseCh
             message: text.trim(),
             sessionId: sessionId || undefined,
             model: modelOverride,
+            reasoningEffort: reasoningEffortOverride,
             signal: controller.signal
           },
           {

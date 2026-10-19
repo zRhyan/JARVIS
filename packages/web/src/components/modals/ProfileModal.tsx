@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { FolderGit2, X, AlertCircle, Plus, Sparkles, KeyRound, ExternalLink, FolderOpen, Loader2 } from 'lucide-react';
-import { CURATED_MODELS } from '../../types/api';
+import { CURATED_MODELS, MODEL_SERVICES } from '../../types/api';
 import { apiClient } from '../../services/api-client';
 
 interface ProfileModalProps {
@@ -169,12 +169,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 }}
                 className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-700/80 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 text-xs text-slate-100 font-mono outline-none transition-all cursor-pointer"
               >
-                {CURATED_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({m.provider}) — {m.badge}
-                  </option>
+                {MODEL_SERVICES.map((srv) => (
+                  <optgroup key={srv.id} label={`── ${srv.name} (${srv.tagline}) ──`}>
+                    {CURATED_MODELS.filter((m) => m.service === srv.id).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} {m.reasoning ? '🧠' : ''} — {m.badge}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
-                <option value="custom">Outro Modelo (Personalizado)...</option>
+                <optgroup label="── Personalizado ──">
+                  <option value="custom">Outro Modelo (Personalizado)...</option>
+                </optgroup>
               </select>
 
               <input

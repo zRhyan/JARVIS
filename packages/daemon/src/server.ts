@@ -40,7 +40,7 @@ const defaultAgentFactory: AgentFactory = (profile: any, ctx, apiKey) =>
     apiKey,
     baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
     model: profile.model,
-    reasoningEffort: profile.reasoningEffort || 'low',
+    reasoningEffort: profile.reasoningEffort,
     vaultConventions: ctx.vaultConventions
   });
 
@@ -344,7 +344,14 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
     try {
       const executor = new ToolExecutor(ctx); // sem onApproval: propostas ficam PENDING
       const modelToUse = typeof b.model === 'string' && b.model.trim() ? b.model.trim() : profile.model;
-      const reasoningEffort = b.reasoningEffort || b.thinking_level?.toLowerCase() || 'low';
+      let reasoningEffort: 'low' | 'medium' | 'high' | undefined = undefined;
+      const rawEffort = (b.reasoningEffort || b.thinking_level || profile.reasoningEffort || '')
+        .toString()
+        .toLowerCase()
+        .trim();
+      if (['low', 'medium', 'high'].includes(rawEffort)) {
+        reasoningEffort = rawEffort as 'low' | 'medium' | 'high';
+      }
       const agentProfile = { ...profile, model: modelToUse, reasoningEffort };
       const agent = agentFactory(agentProfile, ctx, apiKey);
       console.log(`[JARVIS Server] Iniciando execução do agente na sessão ${sessionId} (modelo: "${modelToUse}")...`);

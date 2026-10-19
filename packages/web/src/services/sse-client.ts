@@ -18,6 +18,7 @@ export interface SendMessageOptions {
   message: string;
   sessionId?: string;
   model?: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
   signal?: AbortSignal;
 }
 
@@ -39,7 +40,8 @@ export async function sendChatMessageStream(
     body: JSON.stringify({
       message: options.message,
       sessionId: options.sessionId,
-      model: options.model
+      model: options.model,
+      reasoningEffort: options.reasoningEffort
     }),
     signal: options.signal
   });

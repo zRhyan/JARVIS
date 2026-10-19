@@ -7,7 +7,7 @@ import { useDaemonHealth } from './hooks/useDaemonHealth';
 import { useProfiles } from './hooks/useProfiles';
 import { useSessions } from './hooks/useSessions';
 import { useChat } from './hooks/useChat';
-import { CURATED_MODELS } from './types/api';
+import { CURATED_MODELS, type ReasoningEffort, getModelReasoningConfig } from './types/api';
 import { hasAuthToken } from './services/auth-storage';
 import { ProposalCard } from './components/proposal/ProposalCard';
 import { JarvisIntroScreen } from './components/hud/JarvisIntroScreen';
@@ -41,6 +41,12 @@ export default function App() {
     () => activeProfile?.model || CURATED_MODELS[0].id
   );
 
+  // Intensidade de raciocínio / pensamento
+  const [selectedReasoningEffort, setSelectedReasoningEffort] = useState<ReasoningEffort>(() => {
+    const cfg = getModelReasoningConfig(activeProfile?.model || CURATED_MODELS[0].id);
+    return cfg ? cfg.defaultEffort : 'medium';
+  });
+
   const handleCompleteIntro = () => {
     markIntroShownToday();
     setIntroActive(false);
@@ -65,6 +71,14 @@ export default function App() {
     }
   }, [activeProfile?.id, activeProfile?.model]);
 
+  // Se o modelo mudar, sincroniza o reasoningEffort para um esforço suportado
+  useEffect(() => {
+    const cfg = getModelReasoningConfig(selectedModel);
+    if (cfg && !cfg.supportedEfforts.includes(selectedReasoningEffort)) {
+      setSelectedReasoningEffort(cfg.defaultEffort);
+    }
+  }, [selectedModel]);
+
   const handleTokenUpdated = () => {
     setHasTokenState(hasAuthToken());
     checkHealth();
@@ -84,7 +98,9 @@ export default function App() {
   };
 
   const handleSendMessage = (messageText: string) => {
-    chat.sendMessage(messageText, selectedModel);
+    const cfg = getModelReasoningConfig(selectedModel);
+    const effort = cfg ? selectedReasoningEffort : undefined;
+    chat.sendMessage(messageText, selectedModel, effort);
   };
 
   return (
@@ -105,6 +121,8 @@ export default function App() {
         onCreateProfile={createProfile}
         selectedModel={selectedModel}
         onSelectModel={setSelectedModel}
+        selectedReasoningEffort={selectedReasoningEffort}
+        onSelectReasoningEffort={setSelectedReasoningEffort}
         onSetDefaultModel={setDefaultModel}
         sessions={sessions}
         activeSessionId={activeSessionId}
