@@ -2,6 +2,62 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [Seleção de Modelos por Serviço & Controle Nativo de Pensamento (Reasoning Effort)] - 2026-10-19
+### Status: Concluído
+**Menu de Modelos Categorizado por Serviços (Gemini, Claude, ChatGPT, DeepSeek), Catálogo Curado Expandido e Seletor Visual de Intensidade de Pensamento (Low / Med / High)**
+- **Menu de Modelos Organizado por Serviços (`Header.tsx` & `api.ts`):**
+  - Dropdown redesenhado para categorizar os modelos em 4 abas dos principais serviços: **Gemini** (Google DeepMind), **Claude** (Anthropic), **ChatGPT** (OpenAI) e **DeepSeek & Open Source** (DeepSeek, Meta & Qwen).
+  - Ao clicar em qualquer serviço, a lista curada daquele provedor é exibida instantaneamente com tamanho de janela de contexto (`1M`, `200k`, `128k`, `64k`), badge de capacidade e descrição concisa.
+  - Modelos compatíveis com pensamento trazem identificação visual dedicada `🧠 Thinking (Low/Med/High)`.
+- **Seletor Sutil de Intensidade de Pensamento no Header (`Header.tsx`, `App.tsx`, `sse-client.ts`):**
+  - Quando o modelo ativo suportar opções de raciocínio (como *Gemini 3.8 Flash*, *Claude Sonnet 5*, *o3-mini*, etc.), surge com animação suave ao lado do botão de modelo um controle futurista com ícone de cérebro (`Brain` em tom neon púrpura) e botões rápidos de um clique:
+    - **`Low`**: Resposta mais ágil com reflexão sucinta e menor latência.
+    - **`Med`**: Equilíbrio ideal entre velocidade de resposta e profundidade analítica.
+    - **`High`**: Reflexão minuciosa e deliberação lógica profunda para tarefas complexas.
+  - Ao alternar para um modelo sem opções de raciocínio (ex: *GPT-4o Mini* ou *Gemini 2.5 Flash*), o controle de pensamento fica oculto automaticamente, preservando o minimalismo do cabeçalho.
+- **Catálogo Curado Expandido (`api.ts`):**
+  - **Gemini:** *Gemini 3.8 Flash*, *Gemini 3.5 Flash*, *Gemini 2.5 Pro* e *Gemini 2.5 Flash*.
+  - **Claude:** *Claude Sonnet 5*, *Claude Haiku 5.5*, *Claude Sonnet 4.6* e *Claude Opus 4.6*.
+  - **ChatGPT / OpenAI:** *GPT-5 Mini*, *o3-mini*, *o1*, *GPT-4o* e *GPT-4o Mini*.
+  - **DeepSeek & Open Source:** *DeepSeek V4.1 Flash*, *DeepSeek R1*, *DeepSeek V3*, *Llama 3.3 70B* e *Qwen 2.5 72B*.
+  - Campo de modelo personalizado mantido no rodapé do dropdown para qualquer ID do OpenRouter.
+- **Tratamento Seguro no Backend Fastify (`server.ts` & `agent-loop.ts`):**
+  - A rota `/api/chat` e o motor `JarvisAgent` agora só anexam o parâmetro oficial `reasoning: { effort }` nas chamadas ao OpenRouter se o modelo ativo for compatível com raciocínio, prevenindo erros de chamada por parâmetro não suportado em modelos convencionais.
+- **Agrupamento por Serviços no Cadastro de Perfis (`ProfileModal.tsx`):**
+  - O seletor de modelo padrão no modal de criação de perfis agora utiliza `<optgroup>` por serviço com indicação de modelos `🧠 Thinking`.
+
+---
+
+## [Seletor Nativo de Pastas para Cofres Obsidian] - 2026-10-19
+### Status: Concluído
+**Diálogo de Arquivos do Sistema Operacional Integrado ao Cadastro de Perfis para Seleção Automática do Vault**
+- **Seletor Nativo Multiplataforma (`folder-picker.ts`):**
+  - Suporte nativo completo sem dependências externas pesadas:
+    - **Linux:** `zenity --file-selection --directory` (com fallback para `kdialog`).
+    - **macOS:** AppleScript nativo (`choose folder`).
+    - **Windows:** `FolderBrowserDialog` executado via PowerShell.
+- **Endpoint Seguro no Daemon Fastify (`server.ts`):**
+  - Registrado `POST /api/system/pick-folder` protegido por token de autenticação local Bearer loopback, retornando o caminho absoluto do diretório selecionado ou `null` em caso de cancelamento.
+- **Interface Intuitiva com Botão "Procurar..." (`ProfileModal.tsx` & `api-client.ts`):**
+  - Adicionado o botão `[ Procurar... ]` com ícone `FolderOpen` ao lado do input de caminho do cofre. Ao clicar, o gerenciador de arquivos do sistema operacional é acionado e o campo é preenchido automaticamente ao confirmar a pasta.
+  - Campo manual mantido para permitir colar caminhos diretamente se o usuário preferir.
+
+---
+
+## [Resolução de Visualização de Diffs, Aprovação no Chat e Estabilidade do Agente] - 2026-10-19
+### Status: Concluído
+**Aprovação Direta de Propostas no Chat, Chamadas Paralelas de Ferramentas e Eliminação de Respostas Silenciosas**
+- **Cards de Diff e Aprovação no Chat (`MessageBubble.tsx` & `ChatContainer.tsx`):**
+  - Resolvido problema em que propostas geradas pelo agente não renderizavam os cards interativos de modificação no chat.
+  - Propostas agora são renderizadas diretamente integradas aos balões de resposta do assistente com diff visual de linhas adicionadas/removidas, botões de aprovar/recusar e status atualizado em tempo real.
+- **Diretrizes Avançadas de Grafo e Paralelismo (`agent-loop.ts`):**
+  - System prompt aprimorado para orientar o agente a consultar o grafo semântico (`get_graph_neighborhood`) e emitir chamadas de leitura de notas em lote (paralelo), reduzindo significativamente o tempo de resposta em consultas complexas.
+  - Regras estritas para formatação de wikilinks limpos (sem diretórios fictícios e sem extensão `.md`).
+- **Prevenção de Respostas Silenciosas e Logs Detalhados (`server.ts` & `agent-loop.ts`):**
+  - Adicionado fallback que força a IA a sintetizar e apresentar as descobertas ao usuário mesmo se atingir o limite de iterações do ciclo ReAct, prevenindo término silencioso sem texto final.
+
+---
+
 ## [Experiência Visual Imersiva Tony Stark HUD & Arc Reactor Orb] - 2026-10-17
 ### Status: Concluído
 **Identidade Visual Futurista Inspirada no J.A.R.V.I.S., Abertura Holográfica, Efeitos Sonoros Sci-Fi e Núcleo Reativo**
