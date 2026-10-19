@@ -167,7 +167,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             ) : isStreaming ? (
               <div className="flex items-center gap-2 text-xs text-slate-400 font-mono py-1">
                 <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping"></span>
-                <span>Processando conhecimento do cofre...</span>
+                <span>
+                  {activeTools.length > 0 && activeTools.every((t) => t.isDone)
+                    ? 'Raciocinando sobre o material lido e formulando resposta...'
+                    : activeTools.length > 0
+                    ? 'Consultando conhecimento do cofre...'
+                    : 'Processando solicitação...'}
+                </span>
               </div>
             ) : null}
 
