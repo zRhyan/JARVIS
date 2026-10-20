@@ -2,6 +2,29 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [Robustez do Ciclo ReAct, Eliminação de Looping Fantasma e Diagnóstico Preciso de Tokens] - 2026-10-20
+### Status: Concluído
+**Correção de Looping de Inferência Vazia, Sanitização de Mensagens de Sistema no SQLite e Diagnóstico Contextualizado de Interrupção de Modelo**
+- **Eliminação de Looping Fantasma de 25 Iterações (`agent-loop.ts`):**
+  - Corrigido problema onde uma resposta sem chamadas de ferramentas e com conteúdo textual vazio (`content: null`) fazia o loop ReAct repetir 25 vezes seguidas chamadas à API externa.
+  - Implementada política estrita: quando uma chamada retorna sem ferramentas e sem texto, o JARVIS realiza **1 única tentativa automática de recuperação via streaming**. Caso continue retornando 0 caracteres, o loop é interrompido imediatamente (`break`), economizando tempo, requisições e tokens.
+- **Rastreamento de Execução Real de Ferramentas (`totalToolsExecuted`):**
+  - O JARVIS agora rastreia o número real de ferramentas acionadas na rodada. Instruções de síntese e alertas de limite de ferramentas só são emitidos caso ferramentas tenham sido efetivamente executadas (`totalToolsExecuted > 0`) e o limite real de passos seja atingido.
+- **Prevenção de Contaminação do Histórico do Usuário (`agent-loop.ts` & `server.ts`):**
+  - Prompts dinâmicos de síntese e controle interno agora utilizam um array temporário (`synthesisMessages`) desacoplado do histórico original da sessão.
+  - O bloco de persistência em `server.ts` agora descarta explicitamente qualquer mensagem com `role: 'system'`, garantindo que instruções temporárias de controle interno nunca sejam salvas na tabela de mensagens da conversa.
+  - Executada sanitização no banco local SQLite (`jarvis.db`) removendo mensagens de sistema espúrias de sessões anteriores.
+- **Diagnóstico Preciso de Interrupção com `finish_reason` (`agent-loop.ts` & `server.ts`):**
+  - A classe `JarvisAgent` agora captura e expõe o campo `finish_reason` retornado pelo provedor da API (`length`, `content_filter`, `error`, `stop`).
+  - Quando o modelo conclui sem emitir texto, o usuário recebe agora uma explicação precisa e acionável:
+    - `error`: Alerta explícito de que o provedor externo reportou erro interno temporário nos servidores da API (instabilidade, timeout ou sobrecarga no cluster de inferência), orientando a reenviar em instantes ou alternar temporariamente de modelo.
+    - `length`: Alerta que a cota de tokens de saída foi esgotada pelo raciocínio interno (*thinking*), sugerindo reduzir a intensidade de pensamento ou reenviar a instrução.
+    - `content_filter`: Alerta sobre interrupção por filtros de conteúdo ou segurança do provedor.
+    - Demais casos: Orientação amigável para reenviar o prompt.
+- **Cobertura de Testes Automatizados:** Adicionados novos testes unitários em `agent-loop.test.ts` cobrindo o encerramento imediato, o rastreamento de `finish_reason` e a integridade do array de mensagens.
+
+---
+
 ## [Renderização Nativa de LaTeX e Markdown Rico com Componentes Customizados] - 2026-10-20
 ### Status: Concluído
 **Suporte Completo a Notação Matemática/Lógica em LaTeX e Hierarquia Visual de Títulos e Markdown via Componentes Dedicados**

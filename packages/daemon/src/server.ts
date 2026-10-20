@@ -364,8 +364,17 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       }
 
       if (!finalText.trim()) {
-        console.warn(`[JARVIS Server] Aviso: Agente concluiu sem emitir texto na sessão ${sessionId}. Injetando mensagem explicativa.`);
-        finalText = `⚠️ **O modelo concluiu a operação sem emitir uma resposta textual.** Caso tenha solicitado uma ação no cofre (como criação ou alteração de nota), verifique os arquivos ou tente reformular sua solicitação.`;
+        const finishReason = (agent as any)?.lastFinishReason;
+        console.warn(`[JARVIS Server] Aviso: Agente concluiu sem emitir texto na sessão ${sessionId}. finish_reason: "${finishReason}". Injetando mensagem explicativa.`);
+        if (finishReason === 'error') {
+          finalText = `⚠️ **O provedor externo reportou um erro interno temporário nos servidores (\`finish_reason: error\`).**\n\nIsso indica instabilidade, timeout ou sobrecarga momentânea na infraestrutura da API do modelo. Sugestão: aguarde alguns instantes e reenvie sua solicitação, ou alterne temporariamente para outro modelo no topo da tela.`;
+        } else if (finishReason === 'length') {
+          finalText = `⚠️ **O modelo atingiu o limite de tokens de saída antes de redigir a resposta.**\n\nIsso ocorre frequentemente em modelos de raciocínio profundo quando a cadeia interna de pensamento consome grande parte da cota de tokens. Sugestão: tente reduzir a intensidade de pensamento (ex: de High para Medium) ou reenviar sua solicitação.`;
+        } else if (finishReason === 'content_filter') {
+          finalText = `⚠️ **A resposta foi interrompida pelos filtros de conteúdo ou moderação do provedor.**\n\nSugestão: tente reformular sua solicitação evitando termos sensíveis.`;
+        } else {
+          finalText = `⚠️ **O modelo concluiu a operação sem emitir uma resposta textual.** Caso tenha solicitado uma ação no cofre (como criação ou alteração de nota), verifique os arquivos ou tente reformular sua solicitação.`;
+        }
         send('token', { text: finalText });
       }
 
@@ -380,9 +389,11 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       }
       messages.push({ role: 'assistant', content: finalText });
     } finally {
-      // Persiste tudo o que foi gerado nesta rodada (inclui chamadas de ferramenta)
+      // Persiste o que foi gerado nesta rodada (conversação e chamadas de ferramenta)
       const toSave: NewMessage[] = [];
       for (const m of messages.slice(baseLen) as any[]) {
+        // NUNCA persiste mensagens com role 'system' injetadas em tempo de execução
+        if (m.role === 'system') continue;
         toSave.push({
           role: m.role,
           content: typeof m.content === 'string' ? m.content : m.content == null ? '' : JSON.stringify(m.content),

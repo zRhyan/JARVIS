@@ -95,4 +95,57 @@ describe('JarvisAgent ReAct Loop', () => {
     expect(toolEndSpy).toHaveBeenCalled();
     expect(fullOutput).toBe('A física é uma ciência fundamental.');
   });
+
+  it('execute: deve encerrar imediatamente e capturar finish_reason quando o modelo retorna vazio sem ferramentas', async () => {
+    const mockToolExecutor = {
+      execute: vi.fn()
+    } as unknown as ToolExecutor;
+
+    const agent = new JarvisAgent('fake-api-key');
+
+    let createCalls = 0;
+    (agent as any).client = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(async (params: any) => {
+            createCalls++;
+            if (params.stream) {
+              // Fallback de streaming também retorna vazio
+              return (async function* () {})();
+            }
+            // Chamada não-streaming retorna content vazio e finish_reason length
+            return {
+              choices: [
+                {
+                  finish_reason: 'length',
+                  message: {
+                    role: 'assistant',
+                    content: null,
+                    tool_calls: null
+                  }
+                }
+              ]
+            };
+          })
+        }
+      }
+    };
+
+    const messages: any[] = [{ role: 'user', content: 'Pergunta complexa' }];
+    const stream = agent.execute(messages, mockToolExecutor);
+
+    let output = '';
+    for await (const chunk of stream) {
+      output += chunk.choices[0]?.delta?.content || '';
+    }
+
+    expect(output).toBe('');
+    // Deve fazer exatamente 2 chamadas: 1 tentativa inicial + 1 fallback de streaming
+    // NÃO deve repetir 25 vezes!
+    expect(createCalls).toBe(2);
+    expect(agent.lastFinishReason).toBe('length');
+    expect(agent.totalToolsExecuted).toBe(0);
+    // Não deve poluir o array original de mensagens com instruções de sistema
+    expect(messages.some((m) => m.role === 'system')).toBe(false);
+  });
 });

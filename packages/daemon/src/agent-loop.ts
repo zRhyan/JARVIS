@@ -66,6 +66,9 @@ export class JarvisAgent {
   private reasoningEffort?: 'low' | 'medium' | 'high';
   private vaultConventions?: string;
 
+  public lastFinishReason: string | null = null;
+  public totalToolsExecuted: number = 0;
+
   constructor(config: AgentConfig | string, baseURL?: string, model?: string) {
     let apiKey: string;
     let base: string = 'https://openrouter.ai/api/v1';
@@ -106,6 +109,8 @@ export class JarvisAgent {
   ): AsyncGenerator<OpenAI.Chat.Completions.ChatCompletionChunk, void, unknown> {
     const maxIterations = 25;
     let iteration = 0;
+    this.lastFinishReason = null;
+    this.totalToolsExecuted = 0;
 
     while (iteration < maxIterations) {
       iteration++;
@@ -124,11 +129,19 @@ export class JarvisAgent {
         ...extraParams
       } as any);
 
-      const choice = response.choices[0];
+      const choice = response.choices?.[0];
+      if (!choice) {
+        console.warn(`[JARVIS Agent] Rodada ReAct (iteração ${iteration}): choices vazio retornado pela API.`);
+        this.lastFinishReason = null;
+        break;
+      }
+
+      this.lastFinishReason = choice.finish_reason || (choice as any)?.native_finish_reason || null;
       const message = choice.message;
 
       // 2. Se o modelo invocou chamadas de ferramenta
       if (message.tool_calls && message.tool_calls.length > 0) {
+        this.totalToolsExecuted += message.tool_calls.length;
         console.log(`[JARVIS Agent] Rodada ReAct (iteração ${iteration}): modelo solicitou ${message.tool_calls.length} ferramenta(s): ${message.tool_calls.map((t) => t.function.name).join(', ')}`);
         messages.push(message);
 
@@ -163,17 +176,17 @@ export class JarvisAgent {
         continue;
       }
 
-      // 3. Se não há tool calls, o modelo gerou a resposta final.
-      // O modelo já forneceu a resposta completa no step 1 em `message.content`.
+      // 3. Se não há tool calls e há conteúdo textual, o modelo gerou a resposta final.
       if (message.content) {
-        console.log(`[JARVIS Agent] Rodada ReAct (iteração ${iteration}): modelo concluiu raciocínio com resposta direta (${message.content.length} caracteres).`);
+        console.log(`[JARVIS Agent] Rodada ReAct (iteração ${iteration}): modelo concluiu raciocínio com resposta direta (${message.content.length} caracteres, finish_reason: "${this.lastFinishReason}").`);
         // Envia o conteúdo diretamente em chunks (simulando stream fluido) para o SSE
         const chunkSize = 24;
         for (let i = 0; i < message.content.length; i += chunkSize) {
           yield {
             id: response.id,
             choices: [{
-              delta: { content: message.content.slice(i, i + chunkSize) }
+              delta: { content: message.content.slice(i, i + chunkSize) },
+              finish_reason: this.lastFinishReason as any
             }]
           } as any;
           // Pequeno micro-delay para permitir que o frontend faça render suave caso haja muito texto
@@ -182,7 +195,9 @@ export class JarvisAgent {
         return;
       }
 
-      // Fallback de segurança: caso message.content venha vazio, fazemos chamada de streaming
+      // 4. Fallback de segurança: caso message.content venha vazio e não haja chamadas de ferramentas,
+      // realizamos EXATAMENTE 1 tentativa automática de recuperação via streaming.
+      console.warn(`[JARVIS Agent] Rodada ReAct (iteração ${iteration}): resposta sem conteúdo e sem ferramentas (finish_reason: "${this.lastFinishReason}"). Tentando 1 recuperação via streaming...`);
       let streamedChars = 0;
       try {
         const finalStream = await this.client.chat.completions.create({
@@ -194,15 +209,20 @@ export class JarvisAgent {
 
         for await (const chunk of finalStream) {
           if ((chunk as any).error) {
+            this.lastFinishReason = 'error';
             throw new Error(`OpenRouter Error: ${JSON.stringify((chunk as any).error)}`);
           }
           const text = chunk.choices?.[0]?.delta?.content || '';
           if (text) {
             streamedChars += text.length;
           }
+          if (chunk.choices?.[0]?.finish_reason) {
+            this.lastFinishReason = chunk.choices[0].finish_reason;
+          }
           yield chunk;
         }
       } catch (streamErr: any) {
+        this.lastFinishReason = 'error';
         console.warn('[JARVIS Agent] Falha na tentativa de streaming de fallback:', streamErr.message);
       }
 
@@ -210,59 +230,81 @@ export class JarvisAgent {
         return;
       }
 
-      console.warn('[JARVIS Agent] Fallback de streaming retornou 0 caracteres. Prosseguindo para recuperação com síntese explícita.');
+      // Se mesmo o fallback de streaming retornou 0 caracteres, não há ferramentas sendo chamadas.
+      // Encerrar imediatamente para não entrar em looping fantasma repetindo chamadas vazias.
+      console.warn(`[JARVIS Agent] Fallback de streaming retornou 0 caracteres (finish_reason: "${this.lastFinishReason}"). Encerrando execução sem iterar novamente.`);
+      break;
     }
 
-    // Se atingiu o limite de iterações sem emitir a resposta final,
-    // instrui o LLM a sintetizar as descobertas feitas até o momento em vez de abortar abruptamente.
-    messages.push({
-      role: 'system',
-      content:
-        'Atenção: O limite de consultas de ferramentas para esta rodada foi atingido. NÃO faça novas chamadas de ferramentas. Apresente agora ao usuário uma resposta completa, clara e organizada com todas as notas, relações e descobertas encontradas até o momento.'
-    });
-
-    const fallbackExtraParams: Record<string, any> = {};
-    if (this.reasoningEffort) {
-      fallbackExtraParams.reasoning = { effort: this.reasoningEffort };
-    }
-
-    try {
-      const synthesisResponse = await this.client.chat.completions.create({
-        model: this.model,
-        messages: messages,
-        stream: false,
-        ...fallbackExtraParams
-      } as any);
-      const synthesisContent = synthesisResponse.choices[0]?.message?.content || '';
-      if (synthesisContent) {
-        const chunkSize = 24;
-        for (let i = 0; i < synthesisContent.length; i += chunkSize) {
-          yield {
-            id: synthesisResponse.id,
-            choices: [{
-              delta: { content: synthesisContent.slice(i, i + chunkSize) }
-            }]
-          } as any;
-          await new Promise((r) => setTimeout(r, 10));
+    // Se atingiu o limite de iterações COM ferramentas executadas,
+    // instrui o LLM a sintetizar as descobertas feitas até o momento.
+    // NOTA: Usamos synthesisMessages para não poluir o histórico original persistido no banco com avisos de controle interno.
+    if (iteration >= maxIterations && this.totalToolsExecuted > 0) {
+      console.warn(`[JARVIS Agent] Limite de iterações atingido com ${this.totalToolsExecuted} ferramentas executadas. Disparando síntese final.`);
+      const synthesisMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        ...messages,
+        {
+          role: 'system',
+          content:
+            'Atenção: O limite de consultas de ferramentas para esta rodada foi atingido. NÃO faça novas chamadas de ferramentas. Apresente agora ao usuário uma resposta completa, clara e organizada com todas as notas, relações e descobertas encontradas até o momento.'
         }
-        return;
-      }
-    } catch {
-      // Caso a chamada não-streaming falhe, tenta o fallback com streaming abaixo
-    }
+      ];
 
-    const fallbackStream = await this.client.chat.completions.create({
-      model: this.model,
-      messages: messages,
-      stream: true,
-      ...fallbackExtraParams
-    } as any);
-
-    for await (const chunk of fallbackStream) {
-      if ((chunk as any).error) {
-        throw new Error(`OpenRouter Error: ${JSON.stringify((chunk as any).error)}`);
+      const fallbackExtraParams: Record<string, any> = {};
+      if (this.reasoningEffort) {
+        fallbackExtraParams.reasoning = { effort: this.reasoningEffort };
       }
-      yield chunk;
+
+      try {
+        const synthesisResponse = await this.client.chat.completions.create({
+          model: this.model,
+          messages: synthesisMessages,
+          stream: false,
+          ...fallbackExtraParams
+        } as any);
+        const choice = synthesisResponse.choices?.[0];
+        if (choice?.finish_reason) {
+          this.lastFinishReason = choice.finish_reason;
+        }
+        const synthesisContent = choice?.message?.content || '';
+        if (synthesisContent) {
+          const chunkSize = 24;
+          for (let i = 0; i < synthesisContent.length; i += chunkSize) {
+            yield {
+              id: synthesisResponse.id,
+              choices: [{
+                delta: { content: synthesisContent.slice(i, i + chunkSize) },
+                finish_reason: this.lastFinishReason as any
+              }]
+            } as any;
+            await new Promise((r) => setTimeout(r, 10));
+          }
+          return;
+        }
+      } catch (synthErr: any) {
+        console.warn('[JARVIS Agent] Falha na síntese não-streaming:', synthErr.message);
+      }
+
+      try {
+        const fallbackStream = await this.client.chat.completions.create({
+          model: this.model,
+          messages: synthesisMessages,
+          stream: true,
+          ...fallbackExtraParams
+        } as any);
+
+        for await (const chunk of fallbackStream) {
+          if ((chunk as any).error) {
+            throw new Error(`OpenRouter Error: ${JSON.stringify((chunk as any).error)}`);
+          }
+          if (chunk.choices?.[0]?.finish_reason) {
+            this.lastFinishReason = chunk.choices[0].finish_reason;
+          }
+          yield chunk;
+        }
+      } catch (synthStreamErr: any) {
+        console.warn('[JARVIS Agent] Falha na síntese streaming:', synthStreamErr.message);
+      }
     }
   }
 }
