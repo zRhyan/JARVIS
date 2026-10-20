@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { 
   Sparkles, 
   User, 
@@ -107,11 +109,108 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   };
 
   const ParagraphRenderer = ({ children }: any) => {
-    return <p className="mb-2 leading-relaxed">{renderWithWikilinks(children)}</p>;
+    return <p className="mb-2 leading-relaxed text-slate-200">{renderWithWikilinks(children)}</p>;
   };
 
   const ListItemRenderer = ({ children }: any) => {
-    return <li className="my-1 leading-relaxed text-slate-300">{renderWithWikilinks(children)}</li>;
+    return <li className="leading-relaxed text-slate-300">{renderWithWikilinks(children)}</li>;
+  };
+
+  const UlRenderer = ({ children }: any) => {
+    return <ul className="list-disc pl-5 my-2 space-y-1 text-slate-300">{children}</ul>;
+  };
+
+  const OlRenderer = ({ children }: any) => {
+    return <ol className="list-decimal pl-5 my-2 space-y-1 text-slate-300">{children}</ol>;
+  };
+
+  const H1Renderer = ({ children }: any) => {
+    return (
+      <h1 className="text-base md:text-lg font-bold text-cyan-300 mt-4 mb-2 pb-1.5 border-b border-slate-800/80 flex items-center gap-2">
+        {renderWithWikilinks(children)}
+      </h1>
+    );
+  };
+
+  const H2Renderer = ({ children }: any) => {
+    return (
+      <h2 className="text-sm md:text-base font-bold text-slate-100 mt-3.5 mb-2 pb-1 border-b border-slate-800/40">
+        {renderWithWikilinks(children)}
+      </h2>
+    );
+  };
+
+  const H3Renderer = ({ children }: any) => {
+    return (
+      <h3 className="text-xs md:text-sm font-semibold text-slate-100 mt-3 mb-1.5">
+        {renderWithWikilinks(children)}
+      </h3>
+    );
+  };
+
+  const H4Renderer = ({ children }: any) => {
+    return (
+      <h4 className="text-[11px] md:text-xs font-semibold text-slate-300 uppercase tracking-wider mt-2.5 mb-1">
+        {renderWithWikilinks(children)}
+      </h4>
+    );
+  };
+
+  const BlockquoteRenderer = ({ children }: any) => {
+    return (
+      <blockquote className="my-2.5 pl-3 border-l-2 border-cyan-500/70 bg-cyan-950/20 py-1.5 pr-2 rounded-r-lg italic text-slate-300 text-xs">
+        {renderWithWikilinks(children)}
+      </blockquote>
+    );
+  };
+
+  const HrRenderer = () => <hr className="my-3 border-slate-800/80" />;
+
+  const TableRenderer = ({ children }: any) => {
+    return (
+      <div className="my-3 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/70 shadow-sm">
+        <table className="min-w-full divide-y divide-slate-800 text-xs text-slate-200">
+          {children}
+        </table>
+      </div>
+    );
+  };
+
+  const ThRenderer = ({ children }: any) => {
+    return (
+      <th className="px-3 py-2 text-left text-[11px] font-semibold text-slate-300 bg-slate-900/90 uppercase tracking-wider">
+        {renderWithWikilinks(children)}
+      </th>
+    );
+  };
+
+  const TdRenderer = ({ children }: any) => {
+    return (
+      <td className="px-3 py-2 whitespace-normal text-xs border-b border-slate-800/40">
+        {renderWithWikilinks(children)}
+      </td>
+    );
+  };
+
+  const StrongRenderer = ({ children }: any) => {
+    return <strong className="font-semibold text-slate-100">{renderWithWikilinks(children)}</strong>;
+  };
+
+  const EmRenderer = ({ children }: any) => {
+    return <em className="italic text-slate-200">{renderWithWikilinks(children)}</em>;
+  };
+
+  const AnchorRenderer = ({ href, children }: any) => {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 transition-colors"
+      >
+        {children}
+      </a>
+    );
   };
 
   if (isUser) {
@@ -150,15 +249,32 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
 
           {/* Conteúdo da resposta */}
-          <div className="rounded-2xl px-4 py-3 jarvis-glass-card border border-slate-800/80 text-slate-200 text-xs md:text-sm shadow-md">
+          <div className="rounded-2xl px-4 py-3 jarvis-glass-card border border-slate-800/80 text-slate-200 text-xs md:text-sm shadow-md leading-relaxed">
             {message.content ? (
-              <div className="prose prose-invert prose-xs max-w-none prose-headings:text-slate-100 prose-headings:font-semibold prose-a:text-cyan-400 prose-strong:text-slate-100">
+              <div className="space-y-1">
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
                   components={{
                     code: CodeBlock,
                     p: ParagraphRenderer,
-                    li: ListItemRenderer
+                    li: ListItemRenderer,
+                    ul: UlRenderer,
+                    ol: OlRenderer,
+                    h1: H1Renderer,
+                    h2: H2Renderer,
+                    h3: H3Renderer,
+                    h4: H4Renderer,
+                    h5: H4Renderer,
+                    h6: H4Renderer,
+                    blockquote: BlockquoteRenderer,
+                    hr: HrRenderer,
+                    table: TableRenderer,
+                    th: ThRenderer,
+                    td: TdRenderer,
+                    strong: StrongRenderer,
+                    em: EmRenderer,
+                    a: AnchorRenderer
                   }}
                 >
                   {message.content}

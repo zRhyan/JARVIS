@@ -2,6 +2,28 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [Renderização Nativa de LaTeX e Markdown Rico com Componentes Customizados] - 2026-10-20
+### Status: Concluído
+**Suporte Completo a Notação Matemática/Lógica em LaTeX e Hierarquia Visual de Títulos e Markdown via Componentes Dedicados**
+- **Renderização Nativa de Fórmulas Matemáticas em LaTeX (`remark-math` + `rehype-katex` + `KaTeX`):**
+  - Integrada a biblioteca KaTeX e seus plugins ao pipeline do `ReactMarkdown` no `MessageBubble.tsx`.
+  - Importadas as fontes e estilos CSS do KaTeX (`katex/dist/katex.min.css`) no ponto de entrada da aplicação.
+  - Expressões matemáticas e lógicas em linha (`$V = \{1, 2, ...\}\$`, `$(6, 1) \implies 6 \to 1\$`) e blocos em destaque (`$$ ... $$`) agora são renderizados visualmente com tipografia matemática de alta precisão e performance local sem dependência de rede.
+- **Hierarquia Visual Rica de Markdown sem Inflação de Espaçamentos (Solução B):**
+  - Implementados renderizadores dedicados para tags HTML geradas pelo Markdown no `MessageBubble.tsx`:
+    - `h1`: Título principal imponente com destaque ciano e divisor inferior (`text-base md:text-lg font-bold text-cyan-300`).
+    - `h2`: Subtítulo de seção destacado (`text-sm md:text-base font-bold text-slate-100`).
+    - `h3` / `h4`: Subtítulos de subseção e tópicos claros (`text-xs md:text-sm font-semibold`).
+    - `ul` / `ol` / `li`: Listas ordenadas e não ordenadas com marcadores legíveis e margens compactas de chat.
+    - `blockquote`: Citações elegantes com barra lateral ciano neon e fundo translúcido suave.
+    - `table` / `th` / `td`: Tabelas estruturadas com bordas de painel HUD e cabeçalhos escuros.
+    - `strong` / `em` / `a`: Ênfase e links com transições de cor fluidas.
+  - Todos os títulos e textos continuam 100% integrados à resolução recursiva de `[[Wikilinks]]` do Obsidian.
+- **Diretrizes Aprimoradas no System Prompt (`agent-loop.ts`):**
+  - O JARVIS agora é formalmente orientado a estruturar respostas com títulos e subtítulos Markdown (`##`, `###`) e a expressar formulações de lógica, conjuntos e matemática na notação padrão LaTeX (`$ ... $`).
+
+---
+
 ## [Seleção de Modelos por Serviço & Controle Nativo de Pensamento (Reasoning Effort)] - 2026-10-19
 ### Status: Concluído
 **Menu de Modelos Categorizado por Serviços (Gemini, Claude, ChatGPT, DeepSeek), Catálogo Curado Expandido e Seletor Visual de Intensidade de Pensamento (Low / Med / High)**
