@@ -41,7 +41,12 @@ Nunca alucine notas inexistentes e respeite a estrutura de pastas e notas do cof
    - Para ADICIONAR texto ao final do arquivo: utilize 'search_block: "$END"' e coloque o novo texto em 'replace_block' (ou use as últimas linhas do arquivo como 'search_block' e adicione o novo texto em 'replace_block').
    - Para INSERIR texto no meio ou após uma seção: copie o trecho de referência existente para 'search_block' e em 'replace_block' repita esse trecho acompanhado do novo texto.
    - Ao inserir wikilinks em notas (seja no Map of Content, links relacionados ou texto), NUNCA inclua o caminho de pastas nem a extensão .md. Use SEMPRE apenas o nome limpo da nota (ex: '[[Defintion - All Inference Rules in First Order Logic FOL]]' em vez de '[[6 - Main Notes/Defintion - All Inference Rules in First Order Logic FOL]]').
-5. Para sugerir novas notas, use 'propose_create' respeitando os templates e taxonomias da equipe.
+5. CRIAÇÃO DE NOTAS CANÔNICAS (OS 12 ARQUÉTIPOS DA ONTOLOGIA EPISTÊMICA):
+   - O cofre opera sobre 12 tipos canônicos de notas: 'definition' (Def -), 'axiom' (Axiom -), 'theorem' (Theo -), 'conjecture' (Conj -), 'observation' (Obs -), 'law' (Law -), 'hypothesis' (Hyp -), 'thesis' (Tese -), 'objection' (Obj -), 'quaestio' (Quest -), 'practical' (Prac - / Prat -) e 'field' (Field -).
+   - Quando o usuário solicitar a criação de uma nota em linguagem natural (sem o comando direto '/create'):
+     a) Se houver ambiguidade sobre o Título, o Tipo Canônico ou o Domain Field, confirme esses 3 parâmetros com o usuário primeiro;
+     b) Quando os parâmetros estiverem definidos e confirmados, consulte em paralelo 'get_epistemic_network' (sobre o 'domainField') e 'get_note_slot_contract' (sobre o 'noteType');
+     c) Em seguida, chame 'create_note_from_template' preenchendo todos os slots do contrato em JSON estruturado (NUNCA redija o esqueleto Markdown manualmente para notas dos 12 tipos canônicos; use 'propose_create' apenas para notas livres fora dos 12 tipos).
 
 [DIRETRIZES DE FORMATAÇÃO E RESPOSTA]
 - ESTRUTURAÇÃO VISUAL COM TÍTULOS: Ao redigir respostas analíticas, relatórios, resumos conceituais ou análises de múltiplas perguntas, utilize SEMPRE títulos e subtítulos Markdown bem definidos ('## Seção', '### Tópico') para organizar o raciocínio em seções legíveis, e não apenas linhas soltas em negrito.
@@ -207,7 +212,7 @@ export class JarvisAgent {
           ...extraParams
         } as any);
 
-        for await (const chunk of finalStream) {
+        for await (const chunk of finalStream as unknown as AsyncIterable<any>) {
           if ((chunk as any).error) {
             this.lastFinishReason = 'error';
             throw new Error(`OpenRouter Error: ${JSON.stringify((chunk as any).error)}`);
@@ -293,7 +298,7 @@ export class JarvisAgent {
           ...fallbackExtraParams
         } as any);
 
-        for await (const chunk of fallbackStream) {
+        for await (const chunk of fallbackStream as unknown as AsyncIterable<any>) {
           if ((chunk as any).error) {
             throw new Error(`OpenRouter Error: ${JSON.stringify((chunk as any).error)}`);
           }

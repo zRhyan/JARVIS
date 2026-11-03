@@ -1,6 +1,17 @@
 // packages/daemon/src/profile-repo.ts
 
+import {
+  resolveVaultConventions,
+  type CanonicalNoteArchetype,
+  type NoteTypeConfig,
+  type VaultConventionsConfig
+} from '@jarvis/core';
 import type { JarvisDB } from './db.js';
+
+export interface ProfileConventionsOverrides {
+  templatesDir?: string;
+  noteTypes?: Partial<Record<CanonicalNoteArchetype, Partial<NoteTypeConfig>>>;
+}
 
 export interface Profile {
   id: string;
@@ -8,16 +19,26 @@ export interface Profile {
   vaultPath: string;
   model: string;
   apiKey?: string | null;
+  reasoningEffort?: 'low' | 'medium' | 'high';
+  conventions?: ProfileConventionsOverrides | null;
   isActive: boolean;
 }
 
 export interface PublicProfile extends Omit<Profile, 'apiKey'> {
   apiKey: string | null; // sempre mascarada
+  resolvedConventions: VaultConventionsConfig;
 }
 
 export interface ProfilesFile {
   activeProfileId?: string | null;
-  profiles: Array<{ id: string; name: string; vaultPath: string; model: string; apiKey?: string | null }>;
+  profiles: Array<{
+    id: string;
+    name: string;
+    vaultPath: string;
+    model: string;
+    apiKey?: string | null;
+    conventions?: ProfileConventionsOverrides | null;
+  }>;
 }
 
 export function maskApiKey(key?: string | null): string | null {
@@ -26,17 +47,38 @@ export function maskApiKey(key?: string | null): string | null {
   return `${key.slice(0, 6)}…${key.slice(-4)}`;
 }
 
+export function getResolvedConventionsForProfile(profile?: Pick<Profile, 'conventions'> | null): VaultConventionsConfig {
+  return resolveVaultConventions(profile?.conventions ?? undefined);
+}
+
 export function toPublic(p: Profile): PublicProfile {
-  return { ...p, apiKey: maskApiKey(p.apiKey) };
+  return {
+    ...p,
+    apiKey: maskApiKey(p.apiKey),
+    resolvedConventions: getResolvedConventionsForProfile(p)
+  };
 }
 
 function slugify(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'perfil';
+  return (
+    name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'perfil'
+  );
+}
+
+function parseConventionsJson(raw?: string | null): ProfileConventionsOverrides | null {
+  if (!raw || typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as ProfileConventionsOverrides;
+    }
+  } catch {}
+  return null;
 }
 
 function rowToProfile(r: any): Profile {
@@ -46,6 +88,7 @@ function rowToProfile(r: any): Profile {
     vaultPath: r.vault_path,
     model: r.model,
     apiKey: r.api_key,
+    conventions: parseConventionsJson(r.conventions_json),
     isActive: !!r.is_active
   };
 }
@@ -67,7 +110,14 @@ export class ProfileRepository {
     return r ? rowToProfile(r) : undefined;
   }
 
-  create(input: { id?: string; name: string; vaultPath: string; model: string; apiKey?: string | null }): Profile {
+  create(input: {
+    id?: string;
+    name: string;
+    vaultPath: string;
+    model: string;
+    apiKey?: string | null;
+    conventions?: ProfileConventionsOverrides | null;
+  }): Profile {
     let id = input.id || slugify(input.name);
     if (!input.id) {
       const base = id;
@@ -76,9 +126,12 @@ export class ProfileRepository {
     } else if (this.get(id)) {
       throw new Error(`Perfil "${id}" já existe.`);
     }
+    const conventionsJson = input.conventions ? JSON.stringify(input.conventions) : null;
     this.db
-      .prepare('INSERT INTO profiles (id, name, vault_path, model, api_key) VALUES (?, ?, ?, ?, ?)')
-      .run(id, input.name, input.vaultPath, input.model, input.apiKey ?? null);
+      .prepare(
+        'INSERT INTO profiles (id, name, vault_path, model, api_key, conventions_json) VALUES (?, ?, ?, ?, ?, ?)'
+      )
+      .run(id, input.name, input.vaultPath, input.model, input.apiKey ?? null, conventionsJson);
     // O primeiro perfil criado torna-se ativo automaticamente
     if (!this.getActive()) this.setActive(id);
     return this.get(id)!;
@@ -94,16 +147,31 @@ export class ProfileRepository {
     return this.get(id)!;
   }
 
-  update(id: string, patch: { name?: string; vaultPath?: string; model?: string; apiKey?: string | null }): Profile {
+  update(
+    id: string,
+    patch: {
+      name?: string;
+      vaultPath?: string;
+      model?: string;
+      apiKey?: string | null;
+      conventions?: ProfileConventionsOverrides | null;
+    }
+  ): Profile {
     const existing = this.get(id);
     if (!existing) throw new Error(`Perfil "${id}" não encontrado.`);
     const name = typeof patch.name === 'string' && patch.name.trim() ? patch.name.trim() : existing.name;
-    const vaultPath = typeof patch.vaultPath === 'string' && patch.vaultPath.trim() ? patch.vaultPath.trim() : existing.vaultPath;
+    const vaultPath =
+      typeof patch.vaultPath === 'string' && patch.vaultPath.trim() ? patch.vaultPath.trim() : existing.vaultPath;
     const model = typeof patch.model === 'string' && patch.model.trim() ? patch.model.trim() : existing.model;
     const apiKey = patch.apiKey !== undefined ? patch.apiKey : existing.apiKey;
-    this.db.prepare(
-      'UPDATE profiles SET name = ?, vault_path = ?, model = ?, api_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).run(name, vaultPath, model, apiKey, id);
+    const conventions = patch.conventions !== undefined ? patch.conventions : existing.conventions;
+    const conventionsJson = conventions ? JSON.stringify(conventions) : null;
+
+    this.db
+      .prepare(
+        'UPDATE profiles SET name = ?, vault_path = ?, model = ?, api_key = ?, conventions_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      )
+      .run(name, vaultPath, model, apiKey, conventionsJson, id);
     return this.get(id)!;
   }
 
@@ -111,7 +179,14 @@ export class ProfileRepository {
     const all = this.list();
     return {
       activeProfileId: all.find((p) => p.isActive)?.id ?? null,
-      profiles: all.map((p) => ({ id: p.id, name: p.name, vaultPath: p.vaultPath, model: p.model, apiKey: p.apiKey ?? null }))
+      profiles: all.map((p) => ({
+        id: p.id,
+        name: p.name,
+        vaultPath: p.vaultPath,
+        model: p.model,
+        apiKey: p.apiKey ?? null,
+        ...(p.conventions ? { conventions: p.conventions } : {})
+      }))
     };
   }
 
@@ -119,14 +194,19 @@ export class ProfileRepository {
   importJson(data: ProfilesFile): number {
     if (!data || !Array.isArray(data.profiles)) throw new Error('JSON inválido: campo "profiles" ausente.');
     const upsert = this.db.prepare(`
-      INSERT INTO profiles (id, name, vault_path, model, api_key) VALUES (?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, vault_path, model, api_key, conventions_json) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name = excluded.name, vault_path = excluded.vault_path,
-        model = excluded.model, api_key = excluded.api_key, updated_at = CURRENT_TIMESTAMP
+        model = excluded.model, api_key = excluded.api_key,
+        conventions_json = COALESCE(excluded.conventions_json, profiles.conventions_json),
+        updated_at = CURRENT_TIMESTAMP
     `);
     const tx = this.db.transaction(() => {
       for (const p of data.profiles) {
-        if (!p.id || !p.name || !p.vaultPath || !p.model) throw new Error(`Perfil inválido no JSON: ${JSON.stringify(p.id ?? p)}`);
-        upsert.run(p.id, p.name, p.vaultPath, p.model, p.apiKey ?? null);
+        if (!p.id || !p.name || !p.vaultPath || !p.model) {
+          throw new Error(`Perfil inválido no JSON: ${JSON.stringify(p.id ?? p)}`);
+        }
+        const convJson = p.conventions ? JSON.stringify(p.conventions) : null;
+        upsert.run(p.id, p.name, p.vaultPath, p.model, p.apiKey ?? null, convJson);
       }
     });
     tx();

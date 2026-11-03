@@ -145,8 +145,8 @@ export function parseEpistemicHeader(markdownContent: string): EpistemicHeader {
       continue;
     }
 
-    // 2. Presupposed Concept(s)
-    if (trimmed.match(/^[-*]\s+\*\*Presupposed Concepts?\*\*:?/i)) {
+    // 2. Presupposed Concept(s) ou Broader Field(s) (em notas Field -)
+    if (trimmed.match(/^[-*]\s+\*\*(?:Presupposed Concepts?|Broader Fields?)\*\*:?/i)) {
       currentSection = 'presupposed';
       const inlineLinks = extractWikilinksFromLine(trimmed);
       if (inlineLinks.length > 0) {
@@ -158,27 +158,37 @@ export function parseEpistemicHeader(markdownContent: string): EpistemicHeader {
       continue;
     }
 
-    // 3. Coordinate Concept(s)
-    if (trimmed.match(/^[-*]\s+\*\*Coordinate Concepts?\*\*:?/i)) {
+    // 3. Coordinate Concept(s) ou Coordinate Field(s)
+    if (trimmed.match(/^[-*]\s+\*\*(?:Coordinate Concepts?|Coordinate Fields?)\*\*:?/i)) {
       currentSection = 'coordinate';
       const inlineLinks = extractWikilinksFromLine(trimmed);
       coordinate.push(...inlineLinks);
       continue;
     }
 
-    // 4. Derived Concept(s)
-    if (trimmed.match(/^[-*]\s+\*\*Derived Concepts?\*\*:?/i)) {
+    // 4. Derived Concept(s) ou Narrower Field(s)
+    if (trimmed.match(/^[-*]\s+\*\*(?:Derived Concepts?|Narrower Fields?)\*\*:?/i)) {
       currentSection = 'derived';
       const inlineLinks = extractWikilinksFromLine(trimmed);
       derived.push(...inlineLinks);
       continue;
     }
 
-    // 5. Related (ou Related Concept(s))
-    if (trimmed.match(/^[-*]\s+\*\*Related(?:\s+Concepts?)?\*\*:?/i)) {
+    // 5. Related (ou Related Concept(s), Core Object, Machinery)
+    if (
+      trimmed.match(
+        /^[-*]\s+(?:\*\*)?(?:Related(?:\s+Concepts?)?|Core Objects?|Machinery)(?:\*\*)?:?/i
+      )
+    ) {
       currentSection = 'related';
       const inlineLinks = extractWikilinksFromLine(trimmed);
       related.push(...inlineLinks);
+      continue;
+    }
+
+    // Ignora cabeçalhos agrupadores de seção ("- Concept Taxonomy:" ou "- Field Taxonomy:")
+    if (trimmed.match(/^[-*]\s+(?:Concept|Field)\s+Taxonomy:?$/i)) {
+      currentSection = 'none';
       continue;
     }
 

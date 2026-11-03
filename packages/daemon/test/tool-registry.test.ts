@@ -3,17 +3,20 @@
 import { describe, it, expect } from 'vitest';
 import { jarvisTools } from '../src/tool-registry.js';
 
-describe('Tool Registry Specifications (Marco 2)', () => {
-  it('Deve exportar exatamente as 6 ferramentas canônicas', () => {
-    expect(jarvisTools).toHaveLength(6);
+describe('Tool Registry Specifications (Marco 2 & RFC-008 Etapa 5)', () => {
+  it('Deve exportar exatamente as 9 ferramentas canônicas', () => {
+    expect(jarvisTools).toHaveLength(9);
     const names = jarvisTools.map(t => t.function.name);
 
     expect(names).toContain('list_notes');
     expect(names).toContain('read_note');
     expect(names).toContain('get_graph_neighborhood');
+    expect(names).toContain('get_epistemic_network');
     expect(names).toContain('search_notes');
     expect(names).toContain('propose_block_replace');
     expect(names).toContain('propose_create');
+    expect(names).toContain('get_note_slot_contract');
+    expect(names).toContain('create_note_from_template');
   });
 
   it('Todas as ferramentas devem possuir schema de parâmetros válido', () => {

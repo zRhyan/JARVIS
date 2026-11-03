@@ -5,16 +5,29 @@ import { existsSync, createReadStream, statSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
+import {
+  ALL_CANONICAL_NOTE_ARCHETYPES,
+  getSlotContract
+} from '@jarvis/core';
 import { JarvisAgent, buildSystemPrompt, type ToolCallbacks } from './agent-loop.js';
 import { initVaultContext, type VaultContext } from './vault-context.js';
 import { VaultWatcherService } from './vault-watcher.js';
 import { ToolExecutor } from './tool-executor.js';
 import { verifyBearer, isLoopbackRequest } from './auth.js';
 import type { JarvisDB } from './db.js';
-import { ProfileRepository, toPublic, type Profile } from './profile-repo.js';
+import {
+  getResolvedConventionsForProfile,
+  ProfileRepository,
+  toPublic,
+  type Profile
+} from './profile-repo.js';
 import { SessionRepository, type NewMessage } from './session-repo.js';
 import { ProposalStateManager, ProposalStateError, type ProposalStatus } from './proposal-manager.js';
 import { pickFolderNative } from './folder-picker.js';
+import {
+  executeSingleRoundtripCreate,
+  parseCreateCommand
+} from './note-creator.js';
 
 export interface AgentLike {
   execute(
@@ -66,12 +79,15 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
         await activeCtx.ctx.watcher.close();
       }
       const ctx = await vaultLoader(profile.vaultPath);
+      ctx.conventionsConfig = getResolvedConventionsForProfile(profile);
       if (!ctx.watcher) {
         const watcher = new VaultWatcherService(ctx);
         watcher.start();
         ctx.watcher = watcher;
       }
       activeCtx = { profileId: profile.id, vaultPath: profile.vaultPath, ctx };
+    } else {
+      activeCtx.ctx.conventionsConfig = getResolvedConventionsForProfile(profile);
     }
     return { profile, ctx: activeCtx.ctx };
   }
@@ -92,7 +108,7 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       reply.header('Access-Control-Allow-Origin', origin);
       reply.header('Vary', 'Origin');
       reply.header('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-      reply.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, PATCH, OPTIONS');
+      reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
     }
     if (req.method === 'OPTIONS') return reply.code(204).send();
 
@@ -194,7 +210,14 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       if (typeof b[f] !== 'string' || !b[f].trim()) throw httpError(400, `Campo "${f}" é obrigatório.`);
     }
     try {
-      const p = profiles.create({ id: b.id, name: b.name.trim(), vaultPath: b.vaultPath.trim(), model: b.model.trim(), apiKey: b.apiKey });
+      const p = profiles.create({
+        id: b.id,
+        name: b.name.trim(),
+        vaultPath: b.vaultPath.trim(),
+        model: b.model.trim(),
+        apiKey: b.apiKey,
+        conventions: b.conventions
+      });
       reply.code(201);
       return toPublic(p);
     } catch (e: any) {
@@ -214,6 +237,7 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
 
     // Reinicializa cofre e grafo; só efetiva a troca se o cofre carregar com sucesso
     const ctx = await vaultLoader(target.vaultPath);
+    ctx.conventionsConfig = getResolvedConventionsForProfile(target);
     if (!ctx.watcher) {
       const watcher = new VaultWatcherService(ctx);
       watcher.start();
@@ -233,9 +257,58 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       name: b.name,
       vaultPath: b.vaultPath,
       model: b.model,
-      apiKey: b.apiKey
+      apiKey: b.apiKey,
+      ...(b.conventions !== undefined ? { conventions: b.conventions } : {})
     });
+    if (activeCtx && activeCtx.profileId === id) {
+      activeCtx.ctx.conventionsConfig = getResolvedConventionsForProfile(updated);
+    }
     return toPublic(updated);
+  });
+
+  // ---- Convenções & Contratos de Slots por Perfil ----
+  app.get('/api/profiles/:id/conventions', async (req) => {
+    const { id } = req.params as { id: string };
+    const profile = id === 'active' ? profiles.getActive() : profiles.get(id);
+    if (!profile) throw httpError(404, `Perfil "${id}" não encontrado.`);
+
+    const resolvedConventions = getResolvedConventionsForProfile(profile);
+    const contracts = Object.fromEntries(
+      ALL_CANONICAL_NOTE_ARCHETYPES.map((arch) => [
+        arch,
+        getSlotContract(arch, resolvedConventions)
+      ])
+    );
+
+    return {
+      profileId: profile.id,
+      overrides: profile.conventions ?? null,
+      resolvedConventions,
+      contracts
+    };
+  });
+
+  app.put('/api/profiles/:id/conventions', async (req) => {
+    const { id } = req.params as { id: string };
+    const target = id === 'active' ? profiles.getActive() : profiles.get(id);
+    if (!target) throw httpError(404, `Perfil "${id}" não encontrado.`);
+
+    const b = (req.body ?? {}) as any;
+    const conventionsPatch = b.conventions !== undefined ? b.conventions : b;
+    const updated = profiles.update(target.id, {
+      conventions: conventionsPatch
+    });
+
+    const resolvedConventions = getResolvedConventionsForProfile(updated);
+    if (activeCtx && activeCtx.profileId === updated.id) {
+      activeCtx.ctx.conventionsConfig = resolvedConventions;
+    }
+
+    return {
+      profileId: updated.id,
+      overrides: updated.conventions ?? null,
+      resolvedConventions
+    };
   });
 
   // ---- Sessões ----
@@ -354,6 +427,43 @@ export async function buildServer(opts: ServerOptions): Promise<FastifyInstance>
       }
       const agentProfile = { ...profile, model: modelToUse, reasoningEffort };
       const agent = agentFactory(agentProfile, ctx, apiKey);
+
+      const resolvedConventions = ctx.conventionsConfig ?? getResolvedConventionsForProfile(profile);
+      const parsedCreate = parseCreateCommand(b.message, resolvedConventions);
+
+      if (parsedCreate && parsedCreate.isCreateCommand) {
+        if (!parsedCreate.isValid) {
+          finalText = `⚠️ ${parsedCreate.errorMessage}`;
+          send('token', { text: finalText });
+          messages.push({ role: 'assistant', content: finalText });
+          send('done', { sessionId });
+          return;
+        }
+
+        console.log(
+          `[JARVIS Server] Executando Pipeline Single-Roundtrip /create na sessão ${sessionId} (nota: "${parsedCreate.rawNoteTitle}", tipo: "${parsedCreate.archetype}")...`
+        );
+        const { assistantSummary } = await executeSingleRoundtripCreate({
+          parsedCommand: parsedCreate,
+          ctx,
+          conventions: resolvedConventions,
+          agent,
+          toolExecutor: executor,
+          callbacks,
+          onToken: (t) => {
+            finalText += t;
+            send('token', { text: t });
+          }
+        });
+        if (!finalText) {
+          finalText = assistantSummary;
+          send('token', { text: finalText });
+        }
+        messages.push({ role: 'assistant', content: finalText });
+        send('done', { sessionId });
+        return;
+      }
+
       console.log(`[JARVIS Server] Iniciando execução do agente na sessão ${sessionId} (modelo: "${modelToUse}")...`);
       for await (const chunk of agent.execute(messages, executor, callbacks)) {
         const text = chunk.choices?.[0]?.delta?.content || '';

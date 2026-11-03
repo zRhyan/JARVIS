@@ -2,7 +2,15 @@
 
 import { resolve, join } from 'node:path';
 import { existsSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
-import { VaultFSSandbox, GraphIndex } from '@jarvis/core';
+import {
+  VaultFSSandbox,
+  GraphIndex,
+  EpistemicAIFEngine,
+  compileVaultToEpistemicEngine,
+  DEFAULT_VAULT_CONVENTIONS,
+  type RawVaultNoteInput,
+  type VaultConventionsConfig
+} from '@jarvis/core';
 
 import type { VaultWatcherService } from './vault-watcher.js';
 
@@ -10,8 +18,33 @@ export interface VaultContext {
   vaultPath: string;
   sandbox: VaultFSSandbox;
   graph: GraphIndex;
+  epistemicEngine?: EpistemicAIFEngine;
   vaultConventions?: string;
+  conventionsConfig?: VaultConventionsConfig;
   watcher?: VaultWatcherService;
+}
+
+/**
+ * Compila ou sincroniza a Rede Epistêmica Bipartida AIF em memória a partir dos arquivos Markdown do cofre.
+ */
+export async function syncVaultEpistemicEngine(
+  sandbox: VaultFSSandbox
+): Promise<EpistemicAIFEngine> {
+  const files = await sandbox.listMarkdownFiles();
+  const rawNotes: RawVaultNoteInput[] = [];
+
+  for (const relPath of files) {
+    if (relPath.toLowerCase() === 'vault.md') continue;
+    try {
+      const readRes = await sandbox.readNote(relPath);
+      rawNotes.push({
+        relativePath: readRes.relativePath,
+        content: readRes.content
+      });
+    } catch {}
+  }
+
+  return compileVaultToEpistemicEngine(rawNotes);
 }
 
 /**
@@ -107,6 +140,7 @@ export async function initVaultContext(customVaultPath?: string): Promise<VaultC
   const sandbox = new VaultFSSandbox(vaultPath);
   const graph = new GraphIndex();
   await graph.buildIndex(sandbox);
+  const epistemicEngine = await syncVaultEpistemicEngine(sandbox);
 
   let vaultConventions: string | undefined;
   try {
@@ -120,6 +154,8 @@ export async function initVaultContext(customVaultPath?: string): Promise<VaultC
     vaultPath,
     sandbox,
     graph,
-    vaultConventions
+    epistemicEngine,
+    vaultConventions,
+    conventionsConfig: DEFAULT_VAULT_CONVENTIONS
   };
 }

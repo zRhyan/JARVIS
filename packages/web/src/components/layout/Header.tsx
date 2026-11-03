@@ -17,7 +17,8 @@ import {
   Play,
   Brain,
   Bot,
-  Terminal
+  Terminal,
+  Sliders
 } from 'lucide-react';
 import type { Profile } from '../../types/api';
 import { 
@@ -37,6 +38,7 @@ interface HeaderProps {
   activeProfile: Profile | null;
   onActivateProfile: (id: string) => Promise<void>;
   onOpenNewProfileModal: () => void;
+  onOpenConventionsModal: () => void;
   selectedModel: string;
   onSelectModel: (modelId: string) => void;
   selectedReasoningEffort: ReasoningEffort;
@@ -53,6 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeProfile,
   onActivateProfile,
   onOpenNewProfileModal,
+  onOpenConventionsModal,
   selectedModel,
   onSelectModel,
   selectedReasoningEffort,
@@ -174,13 +177,25 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                 ))}
               </div>
-              <div className="pt-1 border-t border-slate-800/60">
+              <div className="pt-1 border-t border-slate-800/60 space-y-0.5">
+                {activeProfile && (
+                  <button
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      onOpenConventionsModal();
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium text-cyan-300 hover:bg-cyan-500/10 transition-colors cursor-pointer"
+                  >
+                    <Sliders className="h-3.5 w-3.5 text-cyan-400" />
+                    <span>Convenções & Contratos (12 Tipos)</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setProfileDropdownOpen(false);
                     onOpenNewProfileModal();
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Cadastrar Novo Perfil</span>
@@ -407,6 +422,19 @@ export const Header: React.FC<HeaderProps> = ({
             {isStreaming ? 'PROCESSANDO' : 'ONLINE'}
           </span>
         </div>
+
+        {/* Botão de Convenções e Contratos do Perfil (RFC-008 Etapa 6) */}
+        {activeProfile && (
+          <button
+            type="button"
+            onClick={onOpenConventionsModal}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-700/80 bg-slate-900/80 hover:bg-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 transition-all text-xs cursor-pointer"
+            title="Configurar pasta de templates, prefixos e contratos de slots dos 12 tipos canônicos deste perfil"
+          >
+            <Sliders className="h-3.5 w-3.5 text-cyan-400" />
+            <span className="text-[11px] font-medium hidden xl:inline">Convenções & Slots</span>
+          </button>
+        )}
 
         {/* Dropdown de Configurações HUD */}
         <div className="relative" ref={hudRef}>

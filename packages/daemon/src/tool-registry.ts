@@ -61,6 +61,35 @@ export const jarvisTools: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'get_epistemic_network',
+      description: 'Consulta a Rede Epistêmica Bipartida AIF e MMT Theory Graphs. Opera em dois modos: (1) Modo Conceito ("targetNote" existente): retorna o cone dedutivo reverso estratificado por nível topológico (0..N), âncoras de fronteira externa (Lazy Flattening) e alertas de ciclos quebrados; (2) Modo Campo ("domainField" informado, com "targetNote" omitido ou ainda não criado em disco): retorna toda a árvore estratificada do campo sem erro, ideal para planejar a criação de novas notas (/create).',
+      parameters: {
+        type: 'object',
+        properties: {
+          targetNote: {
+            type: 'string',
+            description: 'Nome, wikilink, caminho relativo ou URI MMT da nota alvo (ex: "Def - Grafo Conexo" ou "jarvis://vault?Teoria dos Grafos?Def - Grafo Conexo"). Opcional se "domainField" for informado.'
+          },
+          domainField: {
+            type: 'string',
+            description: 'Nome do Campo/Domínio Teórico MMT (ex: "Teoria dos Grafos"). Obrigatório para Modo Campo ou quando "targetNote" ainda não existe no cofre.'
+          },
+          depth: {
+            type: 'number',
+            description: 'Profundidade máxima opcional de saltos conceituais ascendentes no Modo Conceito.'
+          },
+          includeBoundaryAnchors: {
+            type: 'boolean',
+            description: 'Se verdadeiro (padrão), inclui as âncoras de fronteira externa importadas de outros domínios.'
+          }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'search_notes',
       description: 'Realiza busca textual ou por palavras-chave em todos os arquivos Markdown permitidos do cofre (busca tanto no conteúdo das notas quanto no caminho e nome dos arquivos).',
       parameters: {
@@ -105,7 +134,7 @@ export const jarvisTools: OpenAI.Chat.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'propose_create',
-      description: 'Propõe a criação de uma nova nota Markdown no cofre de forma atômica e segura. Falha se a nota já existir com conteúdo.',
+      description: 'Propõe a criação de uma nova nota Markdown livre no cofre de forma atômica e segura. Para criar notas dos 12 tipos canônicos (Def, Axiom, Theo, Conj, Obs, Law, Hyp, Tese, Obj, Quest, Prac, Field), prefira SEMPRE "create_note_from_template".',
       parameters: {
         type: 'object',
         properties: {
@@ -119,6 +148,57 @@ export const jarvisTools: OpenAI.Chat.ChatCompletionTool[] = [
           }
         },
         required: ['path', 'content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_note_slot_contract',
+      description: 'Carrega sob demanda o contrato formal de slots (<!-- SLOT:X -->) e as regras algorítmicas (Prac - * Note) de UM único tipo canônico de nota (definition, axiom, theorem, conjecture, observation, law, hypothesis, thesis, objection, quaestio, practical, field). Chame antes de "create_note_from_template" no modo linguagem natural.',
+      parameters: {
+        type: 'object',
+        properties: {
+          noteType: {
+            type: 'string',
+            description: 'Tipo canônico da nota (ex: "definition", "axiom", "theorem", "conjecture", "observation", "law", "hypothesis", "thesis", "objection", "quaestio", "practical", "field").'
+          }
+        },
+        required: ['noteType']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_note_from_template',
+      description: 'Cria atomicamente uma nova nota canônica no cofre a partir do template físico oficial ("7 - Templates/*.md"), sanitizando os slots (MOC booleano, callouts, Mermaid, wikilinks) e indexando imediatamente na Rede Epistêmica.',
+      parameters: {
+        type: 'object',
+        properties: {
+          noteTitle: {
+            type: 'string',
+            description: 'Título da nota a ser criada (com ou sem o prefixo canônico, ex: "Grafo Conexo" ou "Def - Grafo Conexo").'
+          },
+          noteType: {
+            type: 'string',
+            description: 'Arquétipo canônico da nota: "definition" | "axiom" | "theorem" | "conjecture" | "observation" | "law" | "hypothesis" | "thesis" | "objection" | "quaestio" | "practical" | "field".'
+          },
+          domainFields: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Lista de campos de domínio (ex: ["Field - Teoria dos Grafos"]).'
+          },
+          folder: {
+            type: 'string',
+            description: 'Subpasta opcional de destino (se omitida, usa automaticamente "1 - Fields" para field e "6 - Main Notes" para os demais).'
+          },
+          slots: {
+            type: 'object',
+            description: 'Objeto JSON mapeando cada identificador de slot do contrato (ex: "STATUS", "MOC_PRESUPPOSED", "DEFINICAO_ENUNCIADO", "DECOMPOSICAO_ANALITICA", "TAXONOMIA_MERMAID", etc.) para o seu conteúdo.'
+          }
+        },
+        required: ['noteTitle', 'noteType', 'slots']
       }
     }
   }

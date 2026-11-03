@@ -2,7 +2,7 @@
 
 import chokidar, { type FSWatcher } from 'chokidar';
 import { relative, resolve } from 'node:path';
-import type { VaultContext } from './vault-context.js';
+import { syncVaultEpistemicEngine, type VaultContext } from './vault-context.js';
 
 export interface VaultWatcherStats {
   indexedNotes: number;
@@ -67,6 +67,7 @@ export class VaultWatcherService {
     try {
       const readResult = await this.ctx.sandbox.readNote(relPath);
       this.ctx.graph.addNote(readResult.relativePath, readResult.content);
+      this.ctx.epistemicEngine = await syncVaultEpistemicEngine(this.ctx.sandbox);
 
       // Se for o arquivo de governança raiz, atualiza as convenções em memória
       if (relPath === 'VAULT.md') {
@@ -98,6 +99,11 @@ export class VaultWatcherService {
     }
 
     if (wasRemoved || relPath === 'VAULT.md') {
+      syncVaultEpistemicEngine(this.ctx.sandbox)
+        .then(engine => {
+          this.ctx.epistemicEngine = engine;
+        })
+        .catch(() => {});
       this.recordSync();
     }
   }

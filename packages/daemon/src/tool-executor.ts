@@ -1,7 +1,22 @@
 // packages/daemon/src/tool-executor.ts
 
-import { PatchEngine, type VaultFSSandbox, type GraphIndex } from '@jarvis/core';
-import type { VaultContext } from './vault-context.js';
+import {
+  buildSingleNoteContractPrompt,
+  DEFAULT_VAULT_CONVENTIONS,
+  extractCanonicalWikilink,
+  extractTemplateSlots,
+  getSlotContract,
+  PatchEngine,
+  queryEpistemicNetwork,
+  type VaultFSSandbox,
+  type GraphIndex
+} from '@jarvis/core';
+import {
+  compileNoteFromSlotPayload,
+  loadOrBuildPhysicalTemplate,
+  resolveArchetypeInput
+} from './note-creator.js';
+import { syncVaultEpistemicEngine, type VaultContext } from './vault-context.js';
 
 export interface ToolExecutionResult {
   tool: string;
@@ -20,12 +35,14 @@ export interface ProposalApprovalContext {
 export type ApprovalHandler = (proposal: ProposalApprovalContext) => Promise<boolean>;
 
 export class ToolExecutor {
+  private context: VaultContext;
   private sandbox: VaultFSSandbox;
   private graph: GraphIndex;
   private patchEngine: PatchEngine;
   private onApproval?: ApprovalHandler;
 
   constructor(context: VaultContext, onApproval?: ApprovalHandler) {
+    this.context = context;
     this.sandbox = context.sandbox;
     this.graph = context.graph;
     this.patchEngine = new PatchEngine();
@@ -48,6 +65,9 @@ export class ToolExecutor {
         case 'get_graph_neighborhood':
           return await this.handleGetGraphNeighborhood(rawArgs);
 
+        case 'get_epistemic_network':
+          return await this.handleGetEpistemicNetwork(rawArgs);
+
         case 'search_notes':
           return await this.handleSearchNotes(rawArgs);
 
@@ -56,6 +76,12 @@ export class ToolExecutor {
 
         case 'propose_create':
           return await this.handleProposeCreate(rawArgs);
+
+        case 'get_note_slot_contract':
+          return await this.handleGetNoteSlotContract(rawArgs);
+
+        case 'create_note_from_template':
+          return await this.handleCreateNoteFromTemplate(rawArgs);
 
         default:
           return {
@@ -188,6 +214,51 @@ export class ToolExecutor {
     };
   }
 
+  private async handleGetEpistemicNetwork(args: Record<string, any>): Promise<ToolExecutionResult> {
+    const targetNote =
+      typeof args.targetNote === 'string' && args.targetNote.trim().length > 0
+        ? args.targetNote.trim()
+        : typeof args.path === 'string' && args.path.trim().length > 0
+          ? args.path.trim()
+          : undefined;
+
+    const domainField =
+      typeof args.domainField === 'string' && args.domainField.trim().length > 0
+        ? args.domainField.trim()
+        : undefined;
+
+    if (!targetNote && !domainField) {
+      return {
+        tool: 'get_epistemic_network',
+        isSuccess: false,
+        error:
+          'Pelo menos um dos parâmetros "targetNote" ou "domainField" deve ser informado em "get_epistemic_network".'
+      };
+    }
+
+    const depth =
+      typeof args.depth === 'number' && Number.isFinite(args.depth) ? args.depth : undefined;
+    const includeBoundaryAnchors =
+      typeof args.includeBoundaryAnchors === 'boolean' ? args.includeBoundaryAnchors : true;
+
+    if (!this.context.epistemicEngine) {
+      this.context.epistemicEngine = await syncVaultEpistemicEngine(this.sandbox);
+    }
+
+    const result = queryEpistemicNetwork(this.context.epistemicEngine, {
+      targetNote,
+      domainField,
+      depth,
+      includeBoundaryAnchors
+    });
+
+    return {
+      tool: 'get_epistemic_network',
+      isSuccess: true,
+      data: result
+    };
+  }
+
   private async handleSearchNotes(args: Record<string, any>): Promise<ToolExecutionResult> {
     const query = args.query;
     if (!query || typeof query !== 'string') {
@@ -308,6 +379,7 @@ export class ToolExecutor {
         // Gravação atômica direta no disco após confirmação do usuário
         const writeResult = await this.sandbox.writeAtomic(resolvedPath, patchResult.patchedContent);
         this.graph.addNote(writeResult.relativePath, writeResult.content);
+        this.context.epistemicEngine = await syncVaultEpistemicEngine(this.sandbox);
 
         return {
           tool: 'propose_block_replace',
@@ -382,8 +454,9 @@ export class ToolExecutor {
     // 2. Grava atomicamente a nova nota
     const writeResult = await this.sandbox.writeAtomic(cleanPath, content);
 
-    // 3. Atualiza o índice do grafo imediatamente
+    // 3. Atualiza o índice do grafo e a rede epistêmica imediatamente
     this.graph.addNote(writeResult.relativePath, writeResult.content);
+    this.context.epistemicEngine = await syncVaultEpistemicEngine(this.sandbox);
 
     return {
       tool: 'propose_create',
@@ -393,6 +466,133 @@ export class ToolExecutor {
         contentHash: writeResult.contentHash,
         sizeBytes: writeResult.sizeBytes,
         message: `Nota "${writeResult.relativePath}" criada atomicamente com sucesso e indexada no grafo.`
+      }
+    };
+  }
+
+  private async handleGetNoteSlotContract(args: Record<string, any>): Promise<ToolExecutionResult> {
+    const rawType = typeof args.noteType === 'string' ? args.noteType : typeof args.type === 'string' ? args.type : '';
+    const conventions = this.context.conventionsConfig ?? DEFAULT_VAULT_CONVENTIONS;
+    const archetype = resolveArchetypeInput(rawType, conventions);
+
+    if (!archetype) {
+      return {
+        tool: 'get_note_slot_contract',
+        isSuccess: false,
+        error: `Tipo de nota inválido: "${rawType}". Valores aceitos: definition, axiom, theorem, conjecture, observation, law, hypothesis, thesis, objection, quaestio, practical, field.`
+      };
+    }
+
+    const { templateContent, templatePathUsed } = await loadOrBuildPhysicalTemplate(
+      this.context,
+      archetype,
+      conventions
+    );
+    const activeSlots = extractTemplateSlots(templateContent);
+    const contract = getSlotContract(archetype, conventions);
+    const contractPrompt = buildSingleNoteContractPrompt(archetype, activeSlots, conventions);
+
+    return {
+      tool: 'get_note_slot_contract',
+      isSuccess: true,
+      data: {
+        archetype,
+        defaultPrefix: contract.defaultPrefix,
+        templateFile: contract.defaultTemplateFile,
+        templatePathUsed,
+        protocolReferenceNote: contract.protocolReferenceNote,
+        activeSlots,
+        contractPrompt
+      }
+    };
+  }
+
+  private async handleCreateNoteFromTemplate(args: Record<string, any>): Promise<ToolExecutionResult> {
+    const rawTitle =
+      typeof args.noteTitle === 'string'
+        ? args.noteTitle.trim()
+        : typeof args.title === 'string'
+          ? args.title.trim()
+          : '';
+    const rawType =
+      typeof args.noteType === 'string'
+        ? args.noteType.trim()
+        : typeof args.type === 'string'
+          ? args.type.trim()
+          : '';
+
+    const conventions = this.context.conventionsConfig ?? DEFAULT_VAULT_CONVENTIONS;
+    const archetype =
+      resolveArchetypeInput(rawType, conventions) ??
+      (rawTitle ? resolveArchetypeInput(rawTitle.split('-')[0] ?? '', conventions) : undefined);
+
+    if (!rawTitle) {
+      return {
+        tool: 'create_note_from_template',
+        isSuccess: false,
+        error: 'O parâmetro "noteTitle" é obrigatório em "create_note_from_template".'
+      };
+    }
+
+    if (!archetype) {
+      return {
+        tool: 'create_note_from_template',
+        isSuccess: false,
+        error: `O parâmetro "noteType" ("${rawType}") é inválido ou ausente.`
+      };
+    }
+
+    let rawSlots: Record<string, unknown> = {};
+    if (args.slots && typeof args.slots === 'object' && !Array.isArray(args.slots)) {
+      rawSlots = args.slots as Record<string, unknown>;
+    } else if (typeof args.slots === 'string') {
+      try {
+        rawSlots = JSON.parse(args.slots);
+      } catch {
+        return {
+          tool: 'create_note_from_template',
+          isSuccess: false,
+          error: 'O parâmetro "slots" deve ser um objeto JSON válido.'
+        };
+      }
+    }
+
+    const domainFields: string[] = [];
+    if (Array.isArray(args.domainFields)) {
+      for (const f of args.domainFields) {
+        const clean = extractCanonicalWikilink(String(f));
+        if (clean) domainFields.push(clean);
+      }
+    } else if (typeof args.domainFields === 'string' && args.domainFields.trim()) {
+      for (const f of args.domainFields.split(',')) {
+        const clean = extractCanonicalWikilink(f);
+        if (clean) domainFields.push(clean);
+      }
+    }
+
+    const folder = typeof args.folder === 'string' && args.folder.trim() ? args.folder.trim() : undefined;
+
+    const compiled = await compileNoteFromSlotPayload({
+      ctx: this.context,
+      archetype,
+      rawNoteTitle: rawTitle,
+      domainFields,
+      folder,
+      rawSlots,
+      conventions
+    });
+
+    return {
+      tool: 'create_note_from_template',
+      isSuccess: true,
+      data: {
+        path: compiled.relativePath,
+        canonicalTitle: compiled.canonicalTitle,
+        archetype: compiled.archetype,
+        templatePathUsed: compiled.templatePathUsed,
+        contentHash: compiled.contentHash,
+        sizeBytes: compiled.sizeBytes,
+        message: `Nota canônica "${compiled.relativePath}" criada com sucesso a partir do template "${compiled.templatePathUsed}", sanitizada e indexada na Rede Epistêmica.`
       }
     };
   }

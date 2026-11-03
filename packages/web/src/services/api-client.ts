@@ -1,6 +1,15 @@
 // packages/web/src/services/api-client.ts
 
-import type { HealthResponse, Profile, Session, Message, Proposal, ProposalStatus } from '../types/api';
+import type {
+  HealthResponse,
+  Profile,
+  Session,
+  Message,
+  Proposal,
+  ProposalStatus,
+  ProfileConventionsResponse,
+  PartialVaultConventionsConfig
+} from '../types/api';
 import { getAuthToken } from './auth-storage';
 
 export class ApiError extends Error {
@@ -74,6 +83,21 @@ export const apiClient = {
     return request<Profile>(`/api/profiles/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(patch)
+    });
+  },
+
+  // Convenções e Contratos de Slots por Perfil (RFC-008 Etapa 5/6)
+  async getProfileConventions(profileId = 'active'): Promise<ProfileConventionsResponse> {
+    return request<ProfileConventionsResponse>(`/api/profiles/${encodeURIComponent(profileId)}/conventions`);
+  },
+
+  async updateProfileConventions(
+    profileId: string,
+    conventions: PartialVaultConventionsConfig | null
+  ): Promise<ProfileConventionsResponse> {
+    return request<ProfileConventionsResponse>(`/api/profiles/${encodeURIComponent(profileId)}/conventions`, {
+      method: 'PUT',
+      body: JSON.stringify({ conventions })
     });
   },
 

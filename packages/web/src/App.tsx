@@ -119,6 +119,7 @@ export default function App() {
         activeProfile={activeProfile}
         onActivateProfile={activateProfile}
         onCreateProfile={createProfile}
+        onConventionsUpdated={refreshProfiles}
         selectedModel={selectedModel}
         onSelectModel={setSelectedModel}
         selectedReasoningEffort={selectedReasoningEffort}

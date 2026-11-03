@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     vault_path TEXT NOT NULL,
     model TEXT NOT NULL,
     api_key TEXT,
+    conventions_json TEXT,
     is_active INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -57,6 +58,36 @@ CREATE TABLE IF NOT EXISTS proposals (
     resolved_at DATETIME,
     FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS epistemic_nodes (
+    profile_id TEXT NOT NULL,
+    id BLOB NOT NULL,
+    canonical_uri TEXT NOT NULL,
+    partition INTEGER NOT NULL,
+    scheme_type INTEGER DEFAULT 0,
+    rule_modality INTEGER DEFAULT 0,
+    canonical_note_type TEXT DEFAULT 'generic',
+    domain_field TEXT NOT NULL,
+    physical_path TEXT NOT NULL,
+    is_placeholder INTEGER DEFAULT 0,
+    payload_excerpt TEXT,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (profile_id, id),
+    UNIQUE (profile_id, canonical_uri),
+    FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS epistemic_edges (
+    profile_id TEXT NOT NULL,
+    source_id BLOB NOT NULL,
+    target_id BLOB NOT NULL,
+    edge_type INTEGER NOT NULL,
+    weight REAL DEFAULT 1.0,
+    PRIMARY KEY (profile_id, source_id, target_id)
+) WITHOUT ROWID;
+
+CREATE INDEX IF NOT EXISTS idx_epistemic_edges_reverse
+ON epistemic_edges(profile_id, target_id, source_id);
 `;
 
 /**
@@ -74,6 +105,10 @@ export function openDatabase(dataDir: string, inMemory = false): JarvisDB {
     if (!existed && process.platform !== 'win32') chmodSync(file, 0o600);
     db.pragma('journal_mode = WAL');
   }
+  db.pragma('synchronous = NORMAL');
+  db.pragma('mmap_size = 268435456');
+  db.pragma('cache_size = -64000');
+  db.pragma('temp_store = MEMORY');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
 
@@ -81,6 +116,12 @@ export function openDatabase(dataDir: string, inMemory = false): JarvisDB {
   const columns = db.prepare("PRAGMA table_info(proposals)").all() as Array<{ name: string }>;
   if (columns.length > 0 && !columns.some((c) => c.name === 'message_id')) {
     db.exec("ALTER TABLE proposals ADD COLUMN message_id TEXT;");
+  }
+
+  // Migração defensiva: adiciona conventions_json na tabela profiles em bases existentes
+  const profileCols = db.prepare("PRAGMA table_info(profiles)").all() as Array<{ name: string }>;
+  if (profileCols.length > 0 && !profileCols.some((c) => c.name === 'conventions_json')) {
+    db.exec("ALTER TABLE profiles ADD COLUMN conventions_json TEXT;");
   }
 
   // Normalização defensiva: se uma proposta tem message_id apontando para uma mensagem sem conteúdo de texto (ex: tool call),

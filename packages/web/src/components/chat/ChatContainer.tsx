@@ -281,6 +281,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         isStreaming={isStreaming}
         onAbortStream={onAbortStream}
         disabled={!hasToken}
+        conventions={activeProfile?.resolvedConventions}
       />
     </div>
   );

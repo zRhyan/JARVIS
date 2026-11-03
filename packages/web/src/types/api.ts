@@ -4,6 +4,75 @@ export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export type ProposalStatus = 'PENDING' | 'APPLIED' | 'REJECTED' | 'STALE';
 
+export type CanonicalNoteArchetype =
+  | 'axiom'
+  | 'definition'
+  | 'theorem'
+  | 'conjecture'
+  | 'observation'
+  | 'law'
+  | 'hypothesis'
+  | 'thesis'
+  | 'objection'
+  | 'quaestio'
+  | 'practical'
+  | 'field';
+
+export type EpistemicModality =
+  | 'inviolable_premise'
+  | 'strict'
+  | 'defeasible'
+  | 'empirical_premise'
+  | 'conflict'
+  | 'inquiry'
+  | 'procedural'
+  | 'theory_module';
+
+export interface NoteTypeConfig {
+  prefix: string;
+  templateFile: string;
+  canonicalType: CanonicalNoteArchetype;
+  modality: EpistemicModality;
+  slotRuleOverrides?: Record<string, string>;
+}
+
+export interface VaultConventionsConfig {
+  templatesDir: string;
+  noteTypes: Record<CanonicalNoteArchetype, NoteTypeConfig>;
+}
+
+export interface PartialVaultConventionsConfig {
+  templatesDir?: string;
+  noteTypes?: Partial<Record<CanonicalNoteArchetype, Partial<NoteTypeConfig>>>;
+}
+
+export interface SlotRuleDefinition {
+  slotName: string;
+  required: boolean;
+  isTaxonomyMocSlot?: boolean;
+  description: string;
+  instructions: string;
+  formatHint?: string;
+}
+
+export interface NoteSlotContract {
+  archetype: CanonicalNoteArchetype;
+  displayNamePt: string;
+  defaultPrefix: string;
+  defaultTemplateFile: string;
+  modality: EpistemicModality;
+  epistemicSummary: string;
+  globalWritingRules: string[];
+  slots: SlotRuleDefinition[];
+}
+
+export interface ProfileConventionsResponse {
+  profileId: string;
+  overrides: PartialVaultConventionsConfig | null;
+  resolvedConventions: VaultConventionsConfig;
+  contracts: Record<CanonicalNoteArchetype, NoteSlotContract>;
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -11,7 +80,212 @@ export interface Profile {
   model: string;
   apiKey: string | null; // Mascarada pelo daemon
   isActive: boolean;
+  conventions?: PartialVaultConventionsConfig | null;
+  resolvedConventions?: VaultConventionsConfig;
 }
+
+export interface SlashCommandOption {
+  id: string;
+  archetype: CanonicalNoteArchetype;
+  labelPt: string;
+  prefix: string;
+  templateFile: string;
+  modalityLabel: string;
+  shortDescription: string;
+  badgeColor: string;
+  keywords: string[];
+}
+
+export const CANONICAL_ARCHETYPE_CATALOG: SlashCommandOption[] = [
+  {
+    id: 'definition',
+    archetype: 'definition',
+    labelPt: 'Definição',
+    prefix: 'Def - ',
+    templateFile: 'Def -.md',
+    modalityLabel: 'R_s • Conjunção Semântica Estrita',
+    shortDescription: 'Fixação essencial, construtiva, operacional ou nominal por Domínio (A–E).',
+    badgeColor: 'text-cyan-300 bg-cyan-950/80 border-cyan-800/80',
+    keywords: ['def', 'definition', 'definicao', 'definição', 'conceito']
+  },
+  {
+    id: 'axiom',
+    archetype: 'axiom',
+    labelPt: 'Axioma / Postulado',
+    prefix: 'Axiom - ',
+    templateFile: 'Axiom -.md',
+    modalityLabel: 'K_n • Premissa Básica Inviolável',
+    shortDescription: 'Ponto de partida indemonstrável e primitivo de um sistema dedutivo.',
+    badgeColor: 'text-amber-300 bg-amber-950/80 border-amber-800/80',
+    keywords: ['axiom', 'axioma', 'postulado']
+  },
+  {
+    id: 'theorem',
+    archetype: 'theorem',
+    labelPt: 'Teorema / Proposição',
+    prefix: 'Theo - ',
+    templateFile: 'Theo -.md',
+    modalityLabel: 'R_s • Dedução Estrita Necessária',
+    shortDescription: 'Proposição formal acompanhada de demonstração dedutiva (Q.E.D.) e corolários.',
+    badgeColor: 'text-emerald-300 bg-emerald-950/80 border-emerald-800/80',
+    keywords: ['theo', 'theorem', 'teorema', 'proposicao', 'proposição', 'lema']
+  },
+  {
+    id: 'conjecture',
+    archetype: 'conjecture',
+    labelPt: 'Conjectura',
+    prefix: 'Conj - ',
+    templateFile: 'Conj -.md',
+    modalityLabel: 'R_d • Proposição Sob Investigação Formal',
+    shortDescription: 'Proposição matemática com evidência formal/computacional sem prova fechada.',
+    badgeColor: 'text-purple-300 bg-purple-950/80 border-purple-800/80',
+    keywords: ['conj', 'conjecture', 'conjectura']
+  },
+  {
+    id: 'observation',
+    archetype: 'observation',
+    labelPt: 'Observação / Evidência',
+    prefix: 'Obs - ',
+    templateFile: 'Obs -.md',
+    modalityLabel: 'K_p • Premissa de Fato Empírica',
+    shortDescription: 'Registro de medições empíricas, dados experimentais e condições de contorno.',
+    badgeColor: 'text-sky-300 bg-sky-950/80 border-sky-800/80',
+    keywords: ['obs', 'observation', 'observacao', 'observação', 'evidencia', 'evidência']
+  },
+  {
+    id: 'law',
+    archetype: 'law',
+    labelPt: 'Lei Empírica',
+    prefix: 'Law - ',
+    templateFile: 'Law -.md',
+    modalityLabel: 'R_d • Princípio Físico / Regra Derrotável',
+    shortDescription: 'Relação funcional invariante induzida de observações com limites de validade.',
+    badgeColor: 'text-indigo-300 bg-indigo-950/80 border-indigo-800/80',
+    keywords: ['law', 'lei', 'principio', 'princípio']
+  },
+  {
+    id: 'hypothesis',
+    archetype: 'hypothesis',
+    labelPt: 'Hipótese',
+    prefix: 'Hyp - ',
+    templateFile: 'Hyp -.md',
+    modalityLabel: 'R_d • Conjectura Científica Explicativa',
+    shortDescription: 'Mecanismo causal proposto com predições falseáveis e experimento crucial.',
+    badgeColor: 'text-teal-300 bg-teal-950/80 border-teal-800/80',
+    keywords: ['hyp', 'hypothesis', 'hipotese', 'hipótese']
+  },
+  {
+    id: 'thesis',
+    archetype: 'thesis',
+    labelPt: 'Tese / Doutrina',
+    prefix: 'Tese - ',
+    templateFile: 'Tese -.md',
+    modalityLabel: 'R_d • Asserção Filosófica / Teológica',
+    shortDescription: 'Posição doutrinária articulada com silogismos principais e respostas a objeções.',
+    badgeColor: 'text-rose-300 bg-rose-950/80 border-rose-800/80',
+    keywords: ['tese', 'thesis', 'doutrina']
+  },
+  {
+    id: 'objection',
+    archetype: 'objection',
+    labelPt: 'Objeção Dialética',
+    prefix: 'Obj - ',
+    templateFile: 'Obj -.md',
+    modalityLabel: 'CA-node • Nó de Conflito Dialético',
+    shortDescription: 'Ataque formal (rebutting, undercutting ou undermining) contra tese ou hipótese.',
+    badgeColor: 'text-orange-300 bg-orange-950/80 border-orange-800/80',
+    keywords: ['obj', 'objection', 'objecao', 'objeção', 'refutacao', 'refutação']
+  },
+  {
+    id: 'quaestio',
+    archetype: 'quaestio',
+    labelPt: 'Questão / Quaestio',
+    prefix: 'Quest - ',
+    templateFile: 'Quest -.md',
+    modalityLabel: 'IBIS • Inquérito Racional / Síntese',
+    shortDescription: 'Investigação comparativa que contrasta conceitos coordenados e sintetiza trade-offs.',
+    badgeColor: 'text-violet-300 bg-violet-950/80 border-violet-800/80',
+    keywords: ['quest', 'quaestio', 'questao', 'questão', 'pergunta']
+  },
+  {
+    id: 'practical',
+    archetype: 'practical',
+    labelPt: 'Prático / Operacional',
+    prefix: 'Prac - ',
+    templateFile: 'Prac -.md',
+    modalityLabel: 'Procedural • Conhecimento Operacional',
+    shortDescription: 'Diretrizes passo a passo, receitas de engenharia, implementação e armadilhas.',
+    badgeColor: 'text-lime-300 bg-lime-950/80 border-lime-800/80',
+    keywords: ['prac', 'prat', 'practical', 'pratico', 'prático', 'procedimento']
+  },
+  {
+    id: 'field',
+    archetype: 'field',
+    labelPt: 'Campo / Área (MOC)',
+    prefix: 'Field - ',
+    templateFile: 'Field -.md',
+    modalityLabel: 'MMT Σ • Teoria Modular / Mapa de Área',
+    shortDescription: 'Mapa estrutural de uma área do conhecimento, objeto central, maquinário e subáreas.',
+    badgeColor: 'text-yellow-300 bg-yellow-950/80 border-yellow-800/80',
+    keywords: ['field', 'campo', 'area', 'área', 'moc']
+  }
+];
+
+/**
+ * Retorna a lista dos 12 tipos canônicos mesclando eventuais prefixos/templates customizados
+ * no perfil ativo e filtrando pelo texto digitado após `/`.
+ */
+export function filterSlashCommands(
+  rawInput: string,
+  conventions?: VaultConventionsConfig | null
+): SlashCommandOption[] {
+  const trimmed = rawInput.trim();
+  if (!trimmed.startsWith('/')) return [];
+
+  // Remove a barra inicial e eventual prefixo "create" para permitir filtrar por "/def" ou "/create def"
+  const afterSlash = trimmed
+    .slice(1)
+    .replace(/^create\b/i, '')
+    .trim()
+    .toLowerCase();
+
+  const mergedCatalog = CANONICAL_ARCHETYPE_CATALOG.map((item) => {
+    const custom = conventions?.noteTypes?.[item.archetype];
+    return {
+      ...item,
+      prefix: custom?.prefix || item.prefix,
+      templateFile: custom?.templateFile || item.templateFile
+    };
+  });
+
+  if (!afterSlash) {
+    return mergedCatalog;
+  }
+
+  return mergedCatalog.filter((item) => {
+    if (item.archetype.toLowerCase().includes(afterSlash)) return true;
+    if (item.labelPt.toLowerCase().includes(afterSlash)) return true;
+    if (item.prefix.toLowerCase().includes(afterSlash)) return true;
+    return item.keywords.some((kw) => kw.toLowerCase().includes(afterSlash));
+  });
+}
+
+/**
+ * Constrói o comando `/create` preenchido para um arquétipo e calcula a posição exata do cursor
+ * dentro das aspas de `note: ""`.
+ */
+export function buildSlashCreateCommandSnippet(archetype: CanonicalNoteArchetype): {
+  commandText: string;
+  cursorOffset: number;
+} {
+  const prefixPart = '/create note: "';
+  const suffixPart = `" type: "${archetype}" field: "[[Field - ]]"`;
+  return {
+    commandText: `${prefixPart}${suffixPart}`,
+    cursorOffset: prefixPart.length
+  };
+}
+
 
 export interface Session {
   id: string;

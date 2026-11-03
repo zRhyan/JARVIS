@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { AuthTokenModal } from '../modals/AuthTokenModal';
 import { ProfileModal } from '../modals/ProfileModal';
+import { ConventionsModal } from '../modals/ConventionsModal';
 import type { Profile, Session, VaultStats } from '../../types/api';
 import { hasAuthToken } from '../../services/auth-storage';
 
@@ -15,6 +16,7 @@ interface MainLayoutProps {
   activeProfile: Profile | null;
   onActivateProfile: (id: string) => Promise<void>;
   onCreateProfile: (data: { name: string; vaultPath: string; model: string; apiKey?: string }) => Promise<any>;
+  onConventionsUpdated?: () => Promise<void> | void;
   selectedModel: string;
   onSelectModel: (modelId: string) => void;
   selectedReasoningEffort: ReasoningEffort;
@@ -39,6 +41,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   activeProfile,
   onActivateProfile,
   onCreateProfile,
+  onConventionsUpdated,
   selectedModel,
   onSelectModel,
   selectedReasoningEffort,
@@ -60,6 +63,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [authTokenModalOpen, setAuthTokenModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [conventionsModalOpen, setConventionsModalOpen] = useState(false);
   const [hasTokenState, setHasTokenState] = useState(() => hasAuthToken());
 
   const handleTokenSaved = () => {
@@ -90,6 +94,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           activeProfile={activeProfile}
           onActivateProfile={onActivateProfile}
           onOpenNewProfileModal={() => setProfileModalOpen(true)}
+          onOpenConventionsModal={() => setConventionsModalOpen(true)}
           selectedModel={selectedModel}
           onSelectModel={onSelectModel}
           selectedReasoningEffort={selectedReasoningEffort}
@@ -117,6 +122,17 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         isOpen={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
         onSubmit={onCreateProfile}
+      />
+
+      <ConventionsModal
+        isOpen={conventionsModalOpen}
+        onClose={() => setConventionsModalOpen(false)}
+        activeProfile={activeProfile}
+        onConventionsUpdated={async () => {
+          if (onConventionsUpdated) {
+            await onConventionsUpdated();
+          }
+        }}
       />
     </div>
   );

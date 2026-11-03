@@ -145,12 +145,32 @@ export function fillTemplateSlots(
   // Substitui cada marcador <!-- SLOT:NAME -->
   const slotRegex = /<!--\s*SLOT:([a-zA-Z0-9_\-]+)\s*-->/g;
 
-  return templateContent.replace(slotRegex, (fullMatch, slotId) => {
+  return templateContent.replace(slotRegex, (fullMatch, slotId, offset: number, fullString: string) => {
     const normSlotId = slotId.trim().toLowerCase().replace(/[\s\-]+/g, '_');
     const value = normalizedValues.get(normSlotId);
 
     if (value !== undefined && value.trim() !== '') {
-      return value.trim();
+      // Verifica o prefixo da linha atual até o marcador <!-- SLOT:X -->
+      const lineStartIdx = fullString.lastIndexOf('\n', offset - 1) + 1;
+      const linePrefix = fullString.slice(lineStartIdx, offset);
+
+      // Se o slot estiver dentro de um Callout / Blockquote do Obsidian (ex: "> <!-- SLOT:X -->"),
+      // propaga o prefixo "> " para todas as linhas subsequentes do conteúdo injetado!
+      const calloutMatch = /^(\s*>\s*)/.exec(linePrefix);
+      if (calloutMatch && calloutMatch[1]) {
+        const quotePrefix = calloutMatch[1];
+        const lines = value.trim().split(/\r?\n/);
+        return lines
+          .map((line, idx) => {
+            const cleanLine = line.replace(/^\s*>\s?/, '');
+            return idx === 0 ? cleanLine : `${quotePrefix}${cleanLine}`;
+          })
+          .join('\n');
+      }
+
+      // Preserva a indentação inicial exata (ex: "\t\t- [[Nota]]" ou "\t- [[Nota]]"),
+      // removendo apenas quebras de linha e espaços em branco no final.
+      return value.replace(/^[\r\n]+/, '').trimEnd();
     }
 
     // Se o slot não veio preenchido:
